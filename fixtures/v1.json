@@ -1,0 +1,12 @@
+{
+  "data": {
+    "collections": [
+      { "collection": "orders", "id": 1, "meta": { "note": "orders table" } }
+    ],
+    "fields": [
+      { "collection": "orders", "field": "status", "id": 10, "type": "string" },
+      { "collection": "orders", "field": "legacy_flag", "id": 11, "type": "boolean" }
+    ],
+    "relations": []
+  }
+}

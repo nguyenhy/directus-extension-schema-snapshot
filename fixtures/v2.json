@@ -1,0 +1,12 @@
+{
+  "data": {
+    "collections": [
+      { "collection": "orders", "id": 1, "meta": { "note": "orders table" } }
+    ],
+    "fields": [
+      { "collection": "orders", "field": "status", "id": 10, "type": "enum" },
+      { "collection": "orders", "field": "tracking_number", "id": 12, "type": "string" }
+    ],
+    "relations": []
+  }
+}

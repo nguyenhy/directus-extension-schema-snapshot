@@ -6,6 +6,7 @@ const { Command } = require('commander');
 const config = require('../config');
 const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
+const { cmdAdd } = require('./commands/add');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -33,9 +34,20 @@ program
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .action(cmdDiff);
 
-try {
-  program.parse();
-} catch (err) {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
-}
+program
+  .command('add')
+  .description('normalize a schema JSON file and commit it as a new version (git-backed)')
+  .argument('<schema.json>', 'path to raw schema export')
+  .option('-m, --message <message>', 'commit message for this version')
+  .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .action(cmdAdd);
+
+(async () => {
+  try {
+    await program.parseAsync();
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+})();

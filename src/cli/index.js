@@ -22,6 +22,7 @@ program
   .option('--out-dir <dir>', 'write one file per entity to this directory', config.defaultOutDir)
   .option('--dry-run', 'print normalized tree to stdout, do not write files')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)
   .action(cmdNormalize);
 
 program

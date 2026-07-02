@@ -47,6 +47,21 @@ docs/                 Design docs — this file, roadmap detail, CLI command ref
 - **Lookup**: `getNormalizer(type)` throws a clear error (`Unknown schema type "x". Available: directus`) on an unregistered type, rather than silently producing an empty tree.
 - **To add a new type**: write a module exporting `normalize(rawSchema) -> tree` matching the same key format, register it in `normalizers`, done — no other file needs to change.
 
+## Subdir format
+
+Every non-dry-run `normalize` writes into a fresh subdir of `--out-dir`, named from a template so repeated runs never collide. Controlled by `--subdir-format` (default `{time}_{name}`), overridable via `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`.
+
+- **Placeholders**: `{name}` — basename of the input file, no extension (e.g. `v1.json` → `v1`). `{time}` — `YYYYMMDD-HHmmss`.
+- **Default `{time}_{name}`**: time-first so `ls`/`find` sorted output reads chronologically across *all* inputs, not grouped by filename first (the old default, `{name}_{time}`, sorted by name first — runs on different input files never interleaved chronologically).
+- **Custom examples**:
+  - `{name}_{time}` — old default, groups by input name first.
+  - `{name}/{time}` — nested layout, one directory per input file, timestamped runs inside it.
+  - `run-{time}` — drop the input name entirely if you always normalize the same file.
+- **Validation** (`utils/fsTree.js`'s `runSubDir()`), all fail fast with a clear `Error:` before any write happens:
+  - Must use at least one of `{name}`/`{time}` — a static string isn't unique across runs, defeats the no-collision guarantee.
+  - Unknown placeholders (e.g. `{foo}`) are rejected, not silently left as literal text.
+  - The rendered result can't contain an empty, `.`, or `..` path segment — `..` specifically would let the subdir escape `--out-dir`.
+
 ## Configuration
 
 Copy `.env.example` to `.env` to override defaults. All vars optional.
@@ -55,6 +70,7 @@ Copy `.env.example` to `.env` to override defaults. All vars optional.
 |---|---|---|
 | `SCHEMA_SNAPSHOT_OUT_DIR` | `.snapshot/normalized` | `normalize`'s default `--out-dir` when the flag isn't passed |
 | `SCHEMA_SNAPSHOT_TYPE` | `directus` | `normalize`/`diff`'s default `--schema-type` when the flag isn't passed |
+| `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` | `{time}_{name}` | `normalize`'s default `--subdir-format` when the flag isn't passed — see [Subdir format](#subdir-format) |
 
 Loaded once at CLI startup via `src/config.js` (`dotenv`); explicit `--out-dir` on the command line always wins over the env var.
 

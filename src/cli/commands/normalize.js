@@ -51,7 +51,7 @@ function buildMeta(tree, inputPath) {
  * per run, see fsTree.js's runSubDir()) — --dry-run is the only way to get
  * stdout-only output with no filesystem writes.
  * @param {string} inputPath - schema.json argument from the CLI
- * @param {{outDir: string, dryRun?: boolean, schemaType: string}} options - commander-parsed options
+ * @param {{outDir: string, dryRun?: boolean, schemaType: string, subdirFormat: string}} options - commander-parsed options
  */
 function cmdNormalize(inputPath, options) {
   const { normalize } = getNormalizer(options.schemaType);
@@ -60,7 +60,7 @@ function cmdNormalize(inputPath, options) {
     console.log(JSON.stringify(tree, null, 2));
     return;
   }
-  const dir = runSubDir(options.outDir, inputPath);
+  const dir = runSubDir(options.outDir, inputPath, options.subdirFormat);
   fs.mkdirSync(dir, { recursive: true });
   fs.copyFileSync(inputPath, path.join(dir, `original${path.extname(inputPath)}`));
   writeTreeToDir(tree, dir);

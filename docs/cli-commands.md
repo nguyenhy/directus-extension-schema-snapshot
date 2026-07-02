@@ -2,25 +2,27 @@
 
 Stage 1: `normalize` + `diff` only. No storage — operates directly on schema JSON files.
 
-## `schema-snapshot normalize <schema.json> [--out-dir <dir>] [--dry-run] [--schema-type <type>]`
+## `schema-snapshot normalize <schema.json> [--out-dir <dir>] [--dry-run] [--schema-type <type>] [--subdir-format <format>]`
 
 Normalize a raw Directus schema export into a canonical entity tree: one entry per collection/field/relation, volatile keys (`id`, `date_created`, `date_updated`, `user_created`, `user_updated`) stripped, object keys sorted.
 
 Always writes to disk by default — no flags needed. Each run creates a fresh, uniquely named subdir, so re-running never overwrites a previous run.
 
-- **Default**: writes under `.snapshot/normalized/<basename-of-input>_<YYYYMMDD-HHmmss>/`:
+- **Default**: writes under `.snapshot/normalized/<YYYYMMDD-HHmmss>_<basename-of-input>/`:
   - `<subdir>/<kind>/<name>.json` — one file per entity (e.g. `.../field/orders.status.json`)
   - `<subdir>/original.json` — copy of the raw input
   - `<subdir>/meta.json` — run summary: `input`, `timestamp`, `toolVersion`, `counts` (collections/fields/relations totals), `collections` (per-collection field/relation name breakdown)
 - **`--out-dir <dir>`**: same layout, rooted at `<dir>` instead of the default `.snapshot/normalized`.
 - **`--dry-run`**: no write at all — prints the normalized tree as JSON to stdout instead (graph view), no `meta.json` either. Takes precedence if combined with `--out-dir`.
 - **`--schema-type <type>`**: which normalizer to use, default `directus` (overridable via `SCHEMA_SNAPSHOT_TYPE` env var). `directus` is currently the only registered type — an unrecognized type errors immediately (`Unknown schema type "x". Available: directus`) instead of silently producing an empty tree. See [architecture.md](./architecture.md#normalizers).
+- **`--subdir-format <format>`**: template for the subdir name, default `{time}_{name}` (overridable via `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` env var). Placeholders: `{name}` (input basename), `{time}` (`YYYYMMDD-HHmmss`). Invalid templates (no placeholder, unknown placeholder, or unsafe rendered path) error immediately before any write. Full detail: [architecture.md#subdir-format](./architecture.md#subdir-format).
 
 ```
 schema-snapshot normalize schema.json
 schema-snapshot normalize schema.json --out-dir ./out
 schema-snapshot normalize schema.json --dry-run
 schema-snapshot normalize schema.json --schema-type directus
+schema-snapshot normalize schema.json --subdir-format "{name}/{time}"
 ```
 
 ## `schema-snapshot diff <schema_old.json> <schema_new.json> [--schema-type <type>]`

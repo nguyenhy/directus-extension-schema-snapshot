@@ -89,6 +89,83 @@ schema-snapshot remove --latest
 schema-snapshot remove --latest --yes
 ```
 
+## `schema-snapshot extract <old> <new> --mode <mode> [--no-dry-run] [--out-dir <dir>] [--subdir-format <format>] [--schema-type <type>] [--store-dir <dir>] [--store-type <type>] [--file-format <format>] [--json]`
+
+Extract a partial EntityTree snapshot of only `added`, `removed`, or `modified` entities between two schemas.
+
+`<old>` and `<new>` are each **auto-detected**: an existing file path is normalized; anything else is treated as a committed version ID. 
+
+Supported argument combinations are: `file` + `file`, `hash` + `file`, and `hash` + `hash`. Any combination where `<old>` is a file path and `<new>` is a version ID is rejected.
+
+- **`--mode <mode>`**: **Required**. Filter mode: `added`, `removed`, or `modified`.
+- **`--no-dry-run`**: Write files to disk. By default, `extract` only prints the result to stdout.
+- **`--out-dir <dir>`**: Directory to write the extracted subfolder (default `.snapshot/normalized`, env `SCHEMA_SNAPSHOT_OUT_DIR`).
+- **`--subdir-format <format>`**: Template for the subfolder name, default `{time}_{name}` (env `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`). The `{name}` placeholder is resolved using the concatenated string `<old>_<new>`.
+  - **GOTCHA**: Since the folder generator uses `path.basename` to extract `{name}` from the combined string, if the `<new>` argument is a file path containing `/` separators, any directories in that path (as well as the entire `<old>` argument) are stripped out of the `{name}` placeholder (e.g. `20f5c7f_/path/to/new.json` resolves to a `{name}` of `new`).
+- **`--schema-type <type>`**: Which normalizer to use, default `directus` (env `SCHEMA_SNAPSHOT_TYPE`).
+- **`--store-dir <dir>`**: Where the version store (git repo) lives, default `.snapshot/repo` (env `SCHEMA_SNAPSHOT_STORE_DIR`).
+- **`--store-type <type>`**: Which Store implementation to use, default `git` (env `SCHEMA_SNAPSHOT_STORE_TYPE`).
+- **`--file-format <format>`**: Which Parser to use for file arguments, default `json` (env `SCHEMA_SNAPSHOT_FILE_FORMAT`).
+- **`--json`**: Output the view data as JSON (in dry-run, outputs `{ mode, keys, dir, tree }`; in write mode, outputs the presenter's view object).
+
+### Examples
+
+#### Dry run (default) — added mode
+```
+$ schema-snapshot extract v1.json v2.json --mode added
+{
+  "field:orders.tracking_number": {
+    "collection": "orders",
+    "field": "tracking_number",
+    "type": "string",
+    "meta": {
+      "interface": "input"
+    }
+  }
+}
+
+1 added -> .snapshot/normalized/20260703-114103_v1.json_v2 (dry run, nothing written; pass --no-dry-run to write)
+```
+
+#### Dry run (default) — modified mode
+```
+$ schema-snapshot extract v1.json v2.json --mode modified
+{
+  "field:orders.status": {
+    "collection": "orders",
+    "field": "status",
+    "type": "enum",
+    "meta": {
+      "interface": "select",
+      "options": {
+        "choices": [
+          { "text": "Draft", "value": "draft" },
+          { "text": "Shipped", "value": "shipped" }
+        ]
+      }
+    }
+  }
+}
+
+1 modified -> .snapshot/normalized/20260703-114103_v1.json_v2 (dry run, nothing written; pass --no-dry-run to write)
+```
+
+#### Writing output (`--no-dry-run`) — added mode
+```
+$ schema-snapshot extract v1.json v2.json --mode added --no-dry-run
++ field:orders.tracking_number
+
+1 added -> .snapshot/normalized/20260703-114103_v1.json_v2
+```
+
+#### Writing output (`--no-dry-run`) — modified mode
+```
+$ schema-snapshot extract v1.json v2.json --mode modified --no-dry-run
+~ field:orders.status
+
+1 modified -> .snapshot/normalized/20260703-114103_v1.json_v2
+```
+
 ## Global
 
 ```

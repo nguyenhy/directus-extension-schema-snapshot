@@ -30,13 +30,15 @@ src/
                                 version = one commit of the full tree.
 
     operations/                One file per command's actual logic (normalize/diff/add/list/
-                                show/remove). Pure orchestration: call normalizer/parser/store,
+                                show/remove/extract). Pure orchestration: call normalizer/parser/store,
                                 build a view via present/, return it. No console.log, no
                                 process.exit, no commander. Reusable by a UI backend.
+      extract.js               Extracts a partial EntityTree of added, removed, or modified entities.
 
     present/                    One file per command's view-builder: turns operation output
                                 into a plain, render-agnostic object (JSON-serializable,
                                 CLI/UI-neutral). No string formatting/printing here.
+      extract.js               Extract operation view builder.
 
     env.js                     createEnv({storeDir, storeType, fileFormat}) -> {store, parse}
                                Composition root — the ONLY place a concrete Store/Parser is
@@ -47,9 +49,11 @@ src/
     commands/                  One file per command: commander action handler. Thin glue —
                                 calls createEnv() + the matching core/operations/*.js function,
                                 then either JSON.stringify (--json) or hands off to render/.
+      extract.js               Action handler for extract command.
     render/                     One file per command: printAddView/printDiffView/etc. —
                                 console.log formatting of a present/ view. Only place that
                                 touches stdout.
+      extract.js               CLI printer for extract command.
 
   utils/                     Small, generic, feature-agnostic helpers — no schema/business
                               knowledge.
@@ -91,7 +95,9 @@ cli/index.js (commander registers "add", parses argv)
        3. options.json ? JSON.stringify(view) : printAddView(view)   // cli/render/add.js -> stdout
 ```
 
-Every other command (`diff`, `list`, `show`, `remove`, `normalize`) is the same shape: **cli/commands (parse argv, build env)** → **core/operations (orchestrate: parser/normalizer/store/diff)** → **core/present (build plain view)** → **cli/render (print) or raw JSON (--json)**.
+Every other command (`diff`, `list`, `show`, `remove`, `normalize`, `extract`) is the same shape: **cli/commands (parse argv, build env)** → **core/operations (orchestrate: parser/normalizer/store/diff)** → **core/present (build plain view)** → **cli/render (print) or raw JSON (--json)**.
+
+Note that `extract` follows the same 4-layer shape as `diff` (with file-vs-version auto-detect). However, `extract` restricts the argument combinations for `<old>` and `<new>` to exactly three supported combinations: `file` + `file`, `hash` (version ID) + `file`, and `hash` + `hash`. Any combination of `file` + `hash` (where `<old>` is a file path and `<new>` is a version ID) is rejected and throws an error.
 
 Why this split: `core/operations/*.js` never imports commander, console, or process — a future Web UI backend calls the exact same functions and gets the exact same view objects, only swapping the last hop (HTTP response instead of stdout print).
 
@@ -124,19 +130,31 @@ Contract lives in `core/store/store.js` (JSDoc-only checklist, no code) — `lis
 ```js
 { added: string[], removed: string[], modified: {key: string, changes: {path, from, to}[]}[] }
 ```
-Produced by `core/diff.js`'s `diff(treeOld, treeNew)` — generic, no Directus knowledge. Equality is `JSON.stringify` comparison (relies on `stripVolatile()` sorting object keys first — NOT a structural equality check). `changedPaths()` only recurses into plain objects; arrays are compared as whole values (one changed array element reports the entire array as changed, not a per-element diff). No rename detection — a remove + add is always two entries, never inferred as one rename (see [roadmap-draft.md](./roadmap-draft.md) stage 2).
+
+Documented as `@typedef {object} DiffResult` in [core/diff.js](../src/core/diff.js#L44-L49).
+
+Produced by `core/diff.js`'s `diff(treeOld, treeNew)` — generic, no Directus knowledge. It is also consumed by the `extract` operation (`core/operations/extract.js`) to filter the EntityTree down to the matching set of keys depending on the chosen mode. Equality is `JSON.stringify` comparison (relies on `stripVolatile()` sorting object keys first — NOT a structural equality check). `changedPaths()` only recurses into plain objects; arrays are compared as whole values (one changed array element reports the entire array as changed, not a per-element diff). No rename detection — a remove + add is always two entries, never inferred as one rename (see [roadmap-draft.md](./roadmap-draft.md) stage 2).
 
 ## Composition root: core/env.js
 
 `createEnv({storeDir, storeType, fileFormat}) -> {store, parse}` is the **only** place a concrete `Store` or `Parser` is constructed (`new GitStore(...)` appears nowhere else). Every `cli/commands/*.js` calls it once, then passes `{store, parse}` into the matching `core/operations/*.js` function as injected dependencies. A future UI backend does the same — construct env once, call the same operation functions.
 
-## Subdir format (normalize only)
+## Subdir format (normalize & extract)
 
-Every non-dry-run `normalize` writes into a fresh subdir of `--out-dir`, named from a template so repeated runs never collide. Controlled by `--subdir-format` (default `{time}_{name}`), overridable via `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`.
+Every non-dry-run `normalize` and `extract` command writes into a fresh subdir of `--out-dir`, named from a template so repeated runs never collide. Controlled by `--subdir-format` (default `{time}_{name}`), overridable via `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`.
 
-- **Placeholders**: `{name}` — basename of the input file, no extension. `{time}` — `YYYYMMDD-HHmmss`.
+- **Placeholders**: 
+  - `{time}` — `YYYYMMDD-HHmmss`.
+  - `{name}` — For `normalize`, the basename of the input file (no extension). For `extract`, computed from the concatenated string `<old>_<new>`.
+- **GOTCHA (for `extract`)**: Because `runSubDir` uses `path.basename` on the combined `<old>_<new>` input string to compute the `{name}` placeholder, if the `<new>` argument is an absolute or relative file path containing `/` separators, any text before the last `/` (which includes the entire `<old>` argument) will be silently stripped out of `{name}` (e.g. `20f5c7f_/path/to/new.json` resolves to a `{name}` of `new`).
 - **Default `{time}_{name}`**: time-first so sorted output reads chronologically across all inputs.
 - **Validation** (`utils/fsTree.js`'s `runSubDir()`), fails fast before any write: must use `{name}` and/or `{time}`; unknown placeholders rejected; rendered result can't contain an empty, `.`, or `..` segment (prevents escaping `--out-dir`).
+
+## Extract dry-run behavior (default dry-run)
+
+By default, `schema-snapshot extract` runs in **dry-run** mode (unlike `normalize` which writes by default). It prints the list of matching keys, the mode, and the subdirectory path where it *would* write.
+
+Passing `--no-dry-run` writes the extracted entities to disk. It reuses `utils/fsTree.js`'s `runSubDir()` and `writeTreeToDir()` to output the exact same directory layout as `normalize` (e.g. `<out-dir>/<subdir>/<kind>/<name>.json`), making the output directly round-trip-able through `schema-snapshot add` or `show --json`.
 
 ## Configuration
 
@@ -144,10 +162,10 @@ Copy `.env.example` to `.env` to override defaults. All vars optional; explicit 
 
 | Var | Default | Affects |
 |---|---|---|
-| `SCHEMA_SNAPSHOT_OUT_DIR` | `.snapshot/normalized` | `normalize`'s default `--out-dir` |
-| `SCHEMA_SNAPSHOT_TYPE` | `directus` | `normalize`/`diff`/`add`/`remove`'s default `--schema-type` |
-| `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` | `{time}_{name}` | `normalize`'s default `--subdir-format` |
-| `SCHEMA_SNAPSHOT_STORE_DIR` | `.snapshot/repo` | `diff`/`add`/`list`/`show`/`remove`'s default `--store-dir` |
+| `SCHEMA_SNAPSHOT_OUT_DIR` | `.snapshot/normalized` | `normalize`/`extract`'s default `--out-dir` |
+| `SCHEMA_SNAPSHOT_TYPE` | `directus` | `normalize`/`diff`/`add`/`remove`/`extract`'s default `--schema-type` |
+| `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` | `{time}_{name}` | `normalize`/`extract`'s default `--subdir-format` |
+| `SCHEMA_SNAPSHOT_STORE_DIR` | `.snapshot/repo` | `diff`/`add`/`list`/`show`/`remove`/`extract`'s default `--store-dir` |
 | `SCHEMA_SNAPSHOT_STORE_TYPE` | `git` | default `--store-type` (only `git` registered) |
 | `SCHEMA_SNAPSHOT_FILE_FORMAT` | `json` | default `--file-format` (only `json` registered) |
 

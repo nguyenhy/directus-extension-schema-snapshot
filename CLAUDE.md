@@ -4,11 +4,11 @@ Agent-facing entry point. Read this first, then [docs/architecture.md](./docs/ar
 
 ## What this repo is
 
-CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
+CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, extracts partial snapshots (added/removed/modified), and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
 
 ## Before touching code
 
-1. Read [docs/architecture.md](./docs/architecture.md) "Flow" section — every command is `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view) → `cli/render` (print). Don't collapse these layers or put console.log/process.exit in `core/`.
+1. Read [docs/architecture.md](./docs/architecture.md) "Flow" section — every command is `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view) → `cli/render` (print). Don't collapse these layers or put console.log/process.exit in `core/` (e.g. `add`, `diff`, `extract`).
 2. Check `docs/roadmap-draft.md` before assuming something is missing or unscoped — it lists what's deliberately not built yet (rename detection, migrate-plan/apply, Web UI) vs. what's done.
 3. `EntityTree` keys are `"kind:name"` strings, parsed by string-split in multiple places (`fsTree.js`, `buildMeta()`) — not a shared parser. Changing the format in `core/directus/normalize.js`'s `entityKey()` silently breaks those call sites with no compile error. Grep for `.indexOf(':')` and `.split(':')` before changing it.
 

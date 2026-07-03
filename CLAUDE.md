@@ -19,6 +19,10 @@ CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diff
 - **Errors are clean, not raw stacks.** Every user-facing failure (missing file, unknown type, bad id) throws a plain `Error` with a message meant to be printed as `Error: <message>` — caught centrally in `cli/index.js`. Don't `console.error(err)` a raw stack from inside `core/` or `cli/commands/`.
 - **Non-destructive by construction.** `GitStore.removeLatest()` is a `git revert`, never `reset --hard` or history rewrite — every prior version stays readable afterward. If you extend removal (e.g. `remove <id>`), preserve this invariant; it's load-bearing for the "safe schema versioning" pitch, not incidental.
 - **JSDoc over prose comments.** Every exported function in `core/` has a `@param`/`@returns` JSDoc block, often with a "GOTCHA:" or rationale paragraph explaining a non-obvious constraint (e.g. `diff.js`'s `deepEqual` relies on sorted keys, not structural equality). Read these before assuming behavior — they're accurate and current, unlike stale prose docs tend to become.
+- **Prefix conventions.** For `diff` and `extract` output:
+  - `+` for added entities.
+  - `-` for removed entities.
+  - `~` for modified entities.
 
 ## Verifying a change
 

@@ -48,6 +48,30 @@ function runStoreContractTests(label, makeStore) {
     assert.equal(versions[1].message, 'first');
   });
 
+  test(`${label}: removeLatest() throws "No versions to remove" on an empty store`, async () => {
+    const store = makeStore();
+    await assert.rejects(() => store.removeLatest(), /No versions to remove/);
+  });
+
+  test(`${label}: removeLatest() is non-destructive — prior versions stay readable, including the reverted one`, async () => {
+    const store = makeStore();
+    const treeA = { 'collection:a': { collection: 'a' } };
+    const treeB = { 'collection:a': { collection: 'a' }, 'collection:b': { collection: 'b' } };
+    const { id: idA } = await store.set(treeA, 'first');
+    const { id: idB } = await store.set(treeB, 'second');
+
+    const { revertedId, tree } = await store.removeLatest();
+
+    assert.equal(revertedId, idB);
+    assert.deepEqual(tree, treeA);
+    // both the reverted version and the one before it remain readable
+    assert.deepEqual(await store.get(idB), treeB);
+    assert.deepEqual(await store.get(idA), treeA);
+    // history is additive, not rewritten — one more version exists now
+    const versions = await store.list();
+    assert.equal(versions.length, 3);
+  });
+
   test(`${label}: diffVersions() always returns old→new regardless of argument order`, async () => {
     const store = makeStore();
     const treeA = { 'collection:a': { collection: 'a' } };

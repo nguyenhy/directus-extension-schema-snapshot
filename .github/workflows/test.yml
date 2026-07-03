@@ -20,4 +20,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Configure git identity for GitStore tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+
       - run: npm test

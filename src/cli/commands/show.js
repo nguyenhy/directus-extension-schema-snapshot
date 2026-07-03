@@ -1,3 +1,4 @@
+const { createEnv } = require('../../core/env');
 const { getVersionView } = require('../../core/operations/show');
 const { printShowView } = require('../render/show');
 
@@ -13,10 +14,11 @@ const { printShowView } = require('../render/show');
  * --json: the same derived view as JSON (for UI / programmatic use).
  *
  * @param {string} id - commit SHA (full or short prefix from `list`)
- * @param {{storeDir: string, json?: boolean}} options
+ * @param {{storeDir: string, storeType: string, json?: boolean}} options
  */
 async function cmdShow(id, options) {
-  const view = await getVersionView({ id, storeDir: options.storeDir });
+  const { store } = createEnv({ storeDir: options.storeDir, storeType: options.storeType });
+  const view = await getVersionView({ id, store });
 
   if (options.json) {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');

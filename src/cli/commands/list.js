@@ -1,3 +1,4 @@
+const { createEnv } = require('../../core/env');
 const { listVersionsView } = require('../../core/operations/list');
 const { printListView } = require('../render/list');
 
@@ -12,10 +13,11 @@ const { printListView } = require('../render/list');
  * Machine output (--json): the same derived view as JSON — UI integrations
  * should use this flag instead of screen-scraping console output.
  *
- * @param {{storeDir: string, json?: boolean}} options
+ * @param {{storeDir: string, storeType: string, json?: boolean}} options
  */
 async function cmdList(options) {
-  const view = await listVersionsView({ storeDir: options.storeDir });
+  const { store } = createEnv({ storeDir: options.storeDir, storeType: options.storeType });
+  const view = await listVersionsView({ store });
 
   if (options.json) {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');

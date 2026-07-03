@@ -107,19 +107,20 @@ class GitStore {
   }
 
   /**
-   * Returns the unix timestamp (ms) of a commit. Used to auto-sort diff args.
-   * Returns null if id is not a store version (e.g. it's a file path).
+   * Returns a commit's depth (count of commits reachable from it) — used
+   * to auto-sort diff args by actual commit-graph position, not wall-clock
+   * time. GOTCHA: commit timestamps (`%at`) only have 1-second resolution,
+   * so two commits made within the same second compare equal and a
+   * timestamp-based sort silently falls back to argument order, breaking
+   * diffVersions(a,b) === diffVersions(b,a). Depth via `rev-list --count`
+   * is exact regardless of timing, because every commit in this store has
+   * a single parent (see set() — always a full-tree linear commit).
    * @param {string} id - commit SHA (full or short)
-   * @returns {Promise<number|null>}
+   * @returns {Promise<number>}
    */
-  async commitTime(id) {
-    try {
-      const raw = await this.git.raw(['log', '-1', '--format=%at', id]);
-      const secs = parseInt(raw.trim(), 10);
-      return isNaN(secs) ? null : secs * 1000;
-    } catch {
-      return null;
-    }
+  async commitDepth(id) {
+    const raw = await this.git.raw(['rev-list', '--count', id]);
+    return parseInt(raw.trim(), 10);
   }
 
   /**
@@ -160,8 +161,9 @@ class GitStore {
   }
 
   /**
-   * Diffs two committed versions. Auto-sorts by commit timestamp so
-   * diffVersions(new, old) === diffVersions(old, new) — always old→new.
+   * Diffs two committed versions. Auto-sorts by commit-graph depth (see
+   * commitDepth()) so diffVersions(new, old) === diffVersions(old, new) —
+   * always old→new.
    * @param {string} idA - commit SHA (full or short)
    * @param {string} idB - commit SHA (full or short)
    * @returns {Promise<{
@@ -174,8 +176,8 @@ class GitStore {
    */
   async diffVersions(idA, idB) {
     const { diff } = require('../diff');
-    const [timeA, timeB] = await Promise.all([this.commitTime(idA), this.commitTime(idB)]);
-    const [idOld, idNew] = timeA <= timeB ? [idA, idB] : [idB, idA];
+    const [depthA, depthB] = await Promise.all([this.commitDepth(idA), this.commitDepth(idB)]);
+    const [idOld, idNew] = depthA <= depthB ? [idA, idB] : [idB, idA];
     const [treeOld, treeNew] = await Promise.all([this.get(idOld), this.get(idNew)]);
     return { result: diff(treeOld, treeNew), treeOld, treeNew, idOld, idNew };
   }

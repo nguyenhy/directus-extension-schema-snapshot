@@ -26,6 +26,7 @@ program
   .option('--dry-run', 'print normalized tree to stdout, do not write files')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)
+  .option('--file-format <format>', 'which Parser to use for the input file (see core/parsers/index.js)', config.defaultFileFormat)
   .action(cmdNormalize);
 
 program
@@ -35,6 +36,8 @@ program
   .argument('<b>', 'newer schema: file path or commit SHA from `list`')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
   .option('--json', 'output the diff view as JSON (for UI / programmatic use)')
   .action(cmdDiff);
 
@@ -45,6 +48,8 @@ program
   .option('-m, --message <message>', 'commit message for this version')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for the input file (see core/parsers/index.js)', config.defaultFileFormat)
   .option('--json', 'output the add view as JSON (for UI / programmatic use)')
   .action(cmdAdd);
 
@@ -52,6 +57,7 @@ program
   .command('list')
   .description('list all committed versions, newest first')
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--json', 'output raw JSON array (for UI / programmatic use)')
   .action(cmdList);
 
@@ -60,6 +66,7 @@ program
   .description('show all entities in a committed version')
   .argument('<id>', 'commit SHA (full or short prefix from `list`)')
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--json', 'output full EntityTree as JSON (for UI / programmatic use)')
   .action(cmdShow);
 

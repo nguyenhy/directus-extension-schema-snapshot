@@ -1,8 +1,6 @@
 const fs = require('fs');
-const { parseFile } = require('../../utils/parse');
 const { getNormalizer } = require('../normalizers');
 const { diff } = require('../diff');
-const { GitStore } = require('../store/git');
 const { buildDiffView } = require('../present/diff');
 
 /**
@@ -10,28 +8,28 @@ const { buildDiffView } = require('../present/diff');
  * — and builds the display view. Reusable by cmdDiff or a UI backend alike.
  *
  * Per-argument auto-detection:
- *   - Existing file path → normalize(parseFile(path))
- *   - Otherwise → commit SHA resolved via GitStore
- * When both args are version ids, delegates to GitStore.diffVersions() which
+ *   - Existing file path → normalize(parse(path))
+ *   - Otherwise → id resolved via `store`
+ * When both args are version ids, delegates to store.diffVersions() which
  * owns auto-sort (always diffs old→new regardless of arg order).
  * When either arg is a file, order is respected as given.
  *
- * @param {{a: string, b: string, schemaType: string, storeDir: string}} params
+ * @param {{a: string, b: string, schemaType: string, store: import('../store/store').Store, parse: (filePath: string) => object}} params
+ *   `store` and `parse` are required, injected dependencies — see
+ *   core/operations/add.js for the rationale.
  * @returns {Promise<ReturnType<typeof buildDiffView>>}
  */
-async function diffSchemas({ a, b, schemaType, storeDir }) {
+async function diffSchemas({ a, b, schemaType, store, parse }) {
   const { normalize } = getNormalizer(schemaType);
   const aIsFile = fs.existsSync(a);
   const bIsFile = fs.existsSync(b);
 
   let result, treeOld, treeNew;
   if (!aIsFile && !bIsFile) {
-    const store = new GitStore(storeDir);
     ({ result, treeOld, treeNew } = await store.diffVersions(a, b));
   } else {
-    const store = (!aIsFile || !bIsFile) ? new GitStore(storeDir) : null;
     const resolveTree = (arg, isFile) =>
-      isFile ? normalize(parseFile(arg)) : store.get(arg);
+      isFile ? normalize(parse(arg)) : store.get(arg);
     [treeOld, treeNew] = await Promise.all([resolveTree(a, aIsFile), resolveTree(b, bIsFile)]);
     result = diff(treeOld, treeNew);
   }

@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { parseFile } = require('../../utils/parse');
 const { getNormalizer } = require('../normalizers');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
 const { buildNormalizeView } = require('../present/normalize');
@@ -51,12 +50,14 @@ function buildMeta(tree, inputPath) {
  * (already-pure core data — no view needed). Otherwise writes a fresh
  * timestamped run dir (original file + per-entity json + meta.json) and
  * returns the confirmation view. Reusable by cmdNormalize or a UI backend.
- * @param {{inputPath: string, schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean}} params
+ * @param {{inputPath: string, schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, parse: (filePath: string) => object}} params
+ *   `parse` is a required, injected dependency — see core/operations/add.js
+ *   for the rationale.
  * @returns {{dryRun: true, tree: import('../normalizers').EntityTree} | {dryRun: false, view: ReturnType<typeof buildNormalizeView>}}
  */
-function normalizeSchema({ inputPath, schemaType, outDir, subdirFormat, dryRun }) {
+function normalizeSchema({ inputPath, schemaType, outDir, subdirFormat, dryRun, parse }) {
   const { normalize } = getNormalizer(schemaType);
-  const tree = normalize(parseFile(inputPath));
+  const tree = normalize(parse(inputPath));
 
   if (dryRun) {
     return { dryRun: true, tree };

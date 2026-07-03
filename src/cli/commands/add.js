@@ -1,3 +1,4 @@
+const { createEnv } = require('../../core/env');
 const { addVersion } = require('../../core/operations/add');
 const { printAddView } = require('../render/add');
 
@@ -7,14 +8,16 @@ const { printAddView } = require('../render/add');
  * core/operations/add.js (reusable by a UI backend too), then chooses
  * whether to print or JSON-dump the returned view.
  * @param {string} inputPath - schema.json argument from the CLI
- * @param {{schemaType: string, storeDir: string, message?: string, json?: boolean}} options - commander-parsed options
+ * @param {{schemaType: string, storeDir: string, storeType: string, fileFormat: string, message?: string, json?: boolean}} options - commander-parsed options
  */
 async function cmdAdd(inputPath, options) {
+  const { store, parse } = createEnv({ storeDir: options.storeDir, storeType: options.storeType, fileFormat: options.fileFormat });
   const view = await addVersion({
     inputPath,
     schemaType: options.schemaType,
-    storeDir: options.storeDir,
     message: options.message,
+    store,
+    parse,
   });
 
   if (options.json) {

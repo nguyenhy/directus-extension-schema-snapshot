@@ -35,14 +35,38 @@ function nextEventId(log) {
 }
 
 /**
- * Every `add` event whose id is NOT referenced by any `remove` event's
- * `removes` field — the "current" set of snapshots (see proposal §2).
+ * Every `add` event currently active — the set backing `list`,
+ * `resolveRef`, and `sync`'s replay. A `remove` event's `removes` field
+ * always names the SPECIFIC event it undoes — the exact thing that was
+ * on top when it was created — which can be either an `add` event
+ * (ordinary removal) or ANOTHER `remove` event (undoing that specific
+ * undo, produced when `remove --latest` runs again on top of a remove
+ * commit — see core/operations/remove.js's removeLatestVersion). "undo"
+ * always refers to the one action it names, never something further back
+ * — e.g. add e1 -> remove e2 (removes e1) -> remove e3 (removes e2, NOT
+ * e1) -> remove e4 (removes e3). To find whether the underlying `add`
+ * event e1 is currently active, walk the chain: each link flips e1's
+ * state once, so the parity of chain length (odd = inactive, even =
+ * active) determines the final state.
  * @param {{events: Array<object>}} log
  * @returns {object[]} active add events, in original log order
  */
 function activeAddEvents(log) {
-  const removedIds = new Set(log.events.filter((e) => e.type === 'remove').map((e) => e.removes));
-  return log.events.filter((e) => e.type === 'add' && !removedIds.has(e.id));
+  const resolvesToAdd = new Map(); // any event id -> the add event id its chain ultimately toggles
+  const isActive = new Map(); // add event id -> current toggled state
+
+  for (const event of log.events) {
+    if (event.type === 'add') {
+      resolvesToAdd.set(event.id, event.id);
+      isActive.set(event.id, true);
+    } else if (event.type === 'remove') {
+      const targetAddId = resolvesToAdd.get(event.removes);
+      resolvesToAdd.set(event.id, targetAddId);
+      if (targetAddId !== undefined) isActive.set(targetAddId, !isActive.get(targetAddId));
+    }
+  }
+
+  return log.events.filter((e) => e.type === 'add' && isActive.get(e.id));
 }
 
 /**
@@ -59,12 +83,13 @@ function activeAddEvents(log) {
  * new ones without a message stay identical in shape.
  * @param {string} dir - schema-snapshots/ directory
  * @param {{events: Array<object>}} log - mutated in place (event pushed)
- * @param {string} hash - contentHash() of the normalized tree
- * @param {object} raw - original parsed source, written verbatim
- * @param {string} [message] - user-supplied annotation for this version
+ * @param {{hash: string, raw: object, message?: string}} fields
+ *   `hash` - contentHash() of the normalized tree
+ *   `raw` - original parsed source, written verbatim
+ *   `message` - user-supplied annotation for this version
  * @returns {object} the appended event
  */
-function appendAddEvent(dir, log, hash, raw, message) {
+function appendAddEvent(dir, log, { hash, raw, message }) {
   const sourceDir = path.join(dir, SOURCE_DIR);
   fs.mkdirSync(sourceDir, { recursive: true });
   const sourcePath = path.join(sourceDir, `${hash}.json`);
@@ -99,6 +124,28 @@ function appendRemoveEvent(log, { hash, eventId }) {
     resolved = matches[matches.length - 1];
   }
   const event = { id: nextEventId(log), type: 'remove', removes: resolved.id, at: new Date().toISOString() };
+  log.events.push(event);
+  return event;
+}
+
+/**
+ * Appends a `remove` event referencing `targetId` directly — no
+ * active-only lookup/validation, unlike `appendRemoveEvent` above. Used
+ * exclusively by `removeLatestVersion` (core/operations/remove.js) for
+ * `remove --latest`'s repeat-toggle behavior: `targetId` is whatever
+ * event id GitStore's current HEAD commit is stamped with — an `add`
+ * event (ordinary removal) or a `remove` event (undoing that specific
+ * undo). `appendRemoveEvent` can't be reused here because it only
+ * resolves against `activeAddEvents`, restricted to currently-active
+ * `add` events (correct for the `--hash`/`--id` explicit-target path,
+ * wrong here — `targetId` may be a `remove` event, or an `add` event
+ * that's currently inactive).
+ * @param {{events: Array<object>}} log - mutated in place (event pushed)
+ * @param {string} targetId - "e<N>" of the specific event being undone
+ * @returns {object} the appended event
+ */
+function appendRemoveEventById(log, targetId) {
+  const event = { id: nextEventId(log), type: 'remove', removes: targetId, at: new Date().toISOString() };
   log.events.push(event);
   return event;
 }
@@ -144,6 +191,39 @@ function parseSyncMessage(message) {
   return m ? { event: m[1], hash: m[2] } : { event: '-', hash: '-' };
 }
 
+// Matches the commit message GitStore.removeLatest() writes when a
+// `remove --latest` tombstones a meta.json event (see
+// core/operations/remove.js's removeLatestVersion): "remove: e2 (removes
+// e1)". Deliberately distinct from SYNC_MESSAGE_RE — a remove event has
+// no content hash (it deletes, it doesn't add a tree), so it's not a
+// resolvable version id the way an add event's is. present/list.js uses
+// this to label the row informationally without implying it's usable
+// with --id/show/get/diff.
+const REMOVE_MESSAGE_RE = /^remove: (e\d+) \(removes (e\d+)\)$/;
+
+/**
+ * @param {string} eventId - "e<N>" of the new tombstone event
+ * @param {string} removedEventId - "e<N>" of the specific event it undoes
+ *   — an `add` event, or another `remove` event (undoing that undo, see
+ *   activeAddEvents' doc comment) — always the immediate one, never
+ *   resolved through to some deeper original
+ * @returns {string} "remove: e2 (removes e1)"
+ */
+function formatRemoveMessage(eventId, removedEventId) {
+  return `remove: ${eventId} (removes ${removedEventId})`;
+}
+
+/**
+ * @param {string} message - a GitStore commit message
+ * @returns {{event: string, removes: string}|null} parsed tombstone event
+ *   id + the specific event id it undoes (add or remove — see
+ *   activeAddEvents), or null if the message isn't a remove commit
+ */
+function parseRemoveMessage(message) {
+  const m = REMOVE_MESSAGE_RE.exec(message || '');
+  return m ? { event: m[1], removes: m[2] } : null;
+}
+
 module.exports = {
   META_FILE,
   SOURCE_DIR,
@@ -152,8 +232,11 @@ module.exports = {
   activeAddEvents,
   appendAddEvent,
   appendRemoveEvent,
+  appendRemoveEventById,
   readSource,
   nextEventId,
   formatSyncMessage,
   parseSyncMessage,
+  formatRemoveMessage,
+  parseRemoveMessage,
 };

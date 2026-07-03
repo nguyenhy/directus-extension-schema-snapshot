@@ -66,8 +66,10 @@ async function confirm(message, previewParams) {
  * `--hash <hash>` / `--id <eventId>` are a separate, sync-able removal
  * path: append a tombstone event to schema-snapshots/meta.json (see
  * core/operations/remove.js's removeSnapshotEvent, proposal gap 3.4/3.6).
- * Mutually exclusive with `--latest` — different mechanisms, different
- * store.
+ * Mutually exclusive with `--latest` — different mechanisms, but
+ * `--latest` also tombstones the reverted version's meta.json event when
+ * one exists (see removeLatestVersion), so the two stores can't drift out
+ * of sync with each other.
  * @param {{latest?: boolean, hash?: string, id?: string, yes?: boolean, schemaType: string, storeDir: string, storeType: string, fileFormat: string, snapshotsDir: string, json?: boolean}} options
  */
 async function cmdRemove(options) {
@@ -109,7 +111,7 @@ async function cmdRemove(options) {
     }
   }
 
-  const view = await removeLatestVersion({ store });
+  const view = await removeLatestVersion({ store, snapshotsDir: options.snapshotsDir });
 
   if (options.json) {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');

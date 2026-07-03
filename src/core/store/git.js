@@ -258,12 +258,18 @@ class GitStore {
    * is deleted or rewritten. Every prior version stays reachable via
    * get()/list() exactly as before, including the one just "removed"
    * (its tree is still readable at its original commit id).
+   * @param {string} [message] - commit message override. When omitted,
+   *   falls back to an auto-built "Remove version <shortId> (N added, N
+   *   modified, N removed)" summary. core/operations/remove.js passes the
+   *   `remove: eN (removes eM)` form (see eventLog.js's
+   *   formatRemoveMessage) when a meta.json tombstone was written for this
+   *   removal, so `list` can label the row instead of showing "-".
    * @returns {Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>}
    *   previousTree is the version being undone; tree is the resulting
    *   (now-current) version after the revert.
    * @throws {Error} "No versions to remove" if the store has no commits yet
    */
-  async removeLatest() {
+  async removeLatest(message) {
     await this.init();
     const versions = await this.list();
     if (versions.length === 0) {
@@ -275,17 +281,19 @@ class GitStore {
     // --no-commit instead of --no-edit: git's auto-generated revert message
     // is `Revert "<original commit message>"`, which names nothing useful
     // when the original message was blank (the common case here). Commit
-    // it ourselves with a message that names the actual hash removed plus
-    // what changed, so `list`/reflog-free history stays informative.
+    // it ourselves instead — either the caller's message, or a fallback
+    // that names the actual hash removed plus what changed, so
+    // `list`/reflog-free history stays informative either way.
     await this.git.raw(['revert', '--no-commit', 'HEAD']);
     const tree = readTreeFromDir(this.dir);
 
     const { diff } = require('../diff');
     const { added, modified, removed } = diff(previousTree, tree);
-    const message = `Remove version ${revertedId.slice(0, 7)} (${added.length} added, ${modified.length} modified, ${removed.length} removed)`;
+    const commitMessage =
+      message || `Remove version ${revertedId.slice(0, 7)} (${added.length} added, ${modified.length} modified, ${removed.length} removed)`;
 
     await this.git.add('.');
-    const summary = await this.git.commit(message, { '--allow-empty': null });
+    const summary = await this.git.commit(commitMessage, { '--allow-empty': null });
     return { id: summary.commit, revertedId, previousTree, tree };
   }
 }

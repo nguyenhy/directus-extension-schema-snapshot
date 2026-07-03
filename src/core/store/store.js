@@ -34,12 +34,15 @@
  *   diffVersions(a, b) === diffVersions(b, a) — always old→new in the
  *   result, regardless of argument order (GitStore sorts by commit time).
  *
- * @property {function(): Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>} removeLatest
+ * @property {function(string=): Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>} removeLatest
  *   Removes the most recent version. MUST be non-destructive — every
  *   prior version, including the one just "removed", MUST remain
  *   readable via get()/list() afterward (GitStore implements this as a
  *   revert commit, never history rewrite/deletion). Throws if the store
- *   has no versions yet.
+ *   has no versions yet. Optional `message` arg overrides the
+ *   implementation's default summary message (used by
+ *   core/operations/remove.js to stamp a `remove: eN (removes eM)` label
+ *   when a meta.json tombstone is written alongside the removal).
  *
  * @property {function(): Promise<void>} reset
  *   Wipes ALL history in this store and leaves it empty but usable

@@ -40,7 +40,7 @@ async function addVersion({ inputPath, schemaType, message, store, parse, snapsh
   if (snapshotsDir) {
     const hash = contentHash(tree);
     log = readEventLog(snapshotsDir);
-    event = appendAddEvent(snapshotsDir, log, hash, raw, message); // mints the event id, stores message on the event, writes source/<hash>.json now
+    event = appendAddEvent(snapshotsDir, log, { hash, raw, message }); // mints the event id, stores message on the event, writes source/<hash>.json now
     commitMessage = formatSyncMessage(event.id, hash);
   }
 

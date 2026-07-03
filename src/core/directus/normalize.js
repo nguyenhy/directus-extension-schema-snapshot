@@ -74,4 +74,37 @@ function normalize(rawSchema) {
   return tree;
 }
 
-module.exports = { normalize, stripVolatile, entityKey };
+/**
+ * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
+ * Groups entities by their kind (collections, fields, relations) and sorts
+ * them stably by their keys.
+ * @param {import('../normalizers').EntityTree} tree
+ * @returns {object} Directus schema shape
+ */
+function denormalize(tree) {
+  const collections = [];
+  const fields = [];
+  const relations = [];
+
+  const keys = Object.keys(tree).sort();
+  for (const key of keys) {
+    const [kind] = key.split(':');
+    if (kind === 'collection') {
+      collections.push(tree[key]);
+    } else if (kind === 'field') {
+      fields.push(tree[key]);
+    } else if (kind === 'relation') {
+      relations.push(tree[key]);
+    }
+  }
+
+  return {
+    data: {
+      collections,
+      fields,
+      relations,
+    },
+  };
+}
+
+module.exports = { normalize, stripVolatile, entityKey, denormalize };

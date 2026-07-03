@@ -34,6 +34,9 @@ src/
                                 build a view via present/, return it. No console.log, no
                                 process.exit, no commander. Reusable by a UI backend.
       extract.js               Extracts a partial EntityTree of added, removed, or modified entities.
+                                Also exports mergeIntoOld() (reconstructs a full tree for
+                                --snapshot/--snapshot-file) and verifyMerge() (re-diffs the
+                                reconstruction to confirm it matches the extracted mode's keys).
 
     present/                    One file per command's view-builder: turns operation output
                                 into a plain, render-agnostic object (JSON-serializable,
@@ -99,6 +102,8 @@ Every other command (`diff`, `list`, `show`, `remove`, `normalize`, `extract`) i
 
 Note that `extract` follows the same 4-layer shape as `diff` (with file-vs-version auto-detect). However, `extract` restricts the argument combinations for `<old>` and `<new>` to exactly three supported combinations: `file` + `file`, `hash` (version ID) + `file`, and `hash` + `hash`. Any combination of `file` + `hash` (where `<old>` is a file path and `<new>` is a version ID) is rejected and throws an error.
 
+When `--snapshot`/`--snapshot-file` is passed, `extractSchemas()` additionally calls `mergeIntoOld(treeOld, deltaTree, mode)` to reconstruct a full, applyable schema (rather than the partial delta), then `verifyMerge(treeOld, merged, result, mode)` to re-diff `treeOld` against the reconstruction and confirm it changed exactly the extracted mode's key set — see "Snapshot reconstruction & merge verification" below.
+
 Why this split: `core/operations/*.js` never imports commander, console, or process — a future Web UI backend calls the exact same functions and gets the exact same view objects, only swapping the last hop (HTTP response instead of stdout print).
 
 ## Data structures (pluggable points)
@@ -133,7 +138,7 @@ Contract lives in `core/store/store.js` (JSDoc-only checklist, no code) — `lis
 
 Documented as `@typedef {object} DiffResult` in [core/diff.js](../src/core/diff.js#L44-L49).
 
-Produced by `core/diff.js`'s `diff(treeOld, treeNew)` — generic, no Directus knowledge. It is also consumed by the `extract` operation (`core/operations/extract.js`) to filter the EntityTree down to the matching set of keys depending on the chosen mode. Equality is `JSON.stringify` comparison (relies on `stripVolatile()` sorting object keys first — NOT a structural equality check). `changedPaths()` only recurses into plain objects; arrays are compared as whole values (one changed array element reports the entire array as changed, not a per-element diff). No rename detection — a remove + add is always two entries, never inferred as one rename (see [roadmap-draft.md](./roadmap-draft.md) stage 2).
+Produced by `core/diff.js`'s `diff(treeOld, treeNew)` — generic, no Directus knowledge. It is also consumed by the `extract` operation (`core/operations/extract.js`) to filter the EntityTree down to the matching set of keys depending on the chosen mode, and reused a second time inside `verifyMerge()` to re-diff `treeOld` against a reconstructed snapshot. Equality is `JSON.stringify` comparison (relies on `stripVolatile()` sorting object keys first — NOT a structural equality check). `changedPaths()` only recurses into plain objects; arrays are compared as whole values (one changed array element reports the entire array as changed, not a per-element diff). No rename detection — a remove + add is always two entries, never inferred as one rename (see [roadmap-draft.md](./roadmap-draft.md) stage 2).
 
 ## Composition root: core/env.js
 
@@ -155,6 +160,15 @@ Every non-dry-run `normalize` and `extract` command writes into a fresh subdir o
 By default, `schema-snapshot extract` runs in **dry-run** mode (unlike `normalize` which writes by default). It prints the list of matching keys, the mode, and the subdirectory path where it *would* write.
 
 Passing `--no-dry-run` writes the extracted entities to disk. It reuses `utils/fsTree.js`'s `runSubDir()` and `writeTreeToDir()` to output the exact same directory layout as `normalize` (e.g. `<out-dir>/<subdir>/<kind>/<name>.json`), making the output directly round-trip-able through `schema-snapshot add` or `show --json`.
+
+## Snapshot reconstruction & merge verification (`--snapshot`/`--snapshot-file`)
+
+`--snapshot`/`--snapshot-file` produce a single **full** schema file instead of one-file-per-entity, so it can be applied wholesale (e.g. re-imported into Directus) rather than requiring the caller to reassemble the split files. Requires the normalizer to expose `denormalize(tree) -> rawSchema`; only `directus` supports this today.
+
+- `mergeIntoOld(treeOld, deltaTree, mode)` (`core/operations/extract.js`) does the reconstruction: `added`/`modified` overlay the delta onto `treeOld` (`{...treeOld, ...deltaTree}`); `removed` deletes the delta's keys from a copy of `treeOld`.
+- `verifyMerge(treeOld, merged, result, mode)` re-diffs `treeOld` vs. the reconstruction and asserts the change set matches exactly the extracted mode's key set — no extra file I/O or network call, purely re-using data already in memory. Its result (`{ok, unexpectedAdded, unexpectedRemoved, unexpectedModified, missingKeys}`) is attached to `extractSchemas()`'s return value whenever a merge happened, surfaced by `cli/render/extract.js` as a `✓`/`✗` line and included in `--json` output.
+- **GOTCHA**: `verifyMerge`'s unexpected-key logic assumes extraction is single-mode — for the two non-matching categories, the entire diff result for that category counts as "unexpected," not just entries outside the expected set. This holds today because `expectedKeys` is always empty for non-matching categories; if mixed-mode merges are ever supported, `verifyMerge` needs updating (see its doc comment).
+- **Failure consequence**: dry-run prints the `✗` line but leaves the exit code untouched (nothing was written). A real (`--no-dry-run`) write writes the file first, then throws if verification fails — caught by `cli/index.js`'s central handler, printed as `Error: ...`, exit code `1`. The bad file stays on disk for inspection; nothing is auto-deleted (consistent with this repo's "non-destructive by construction" ethos — the file, once written, is never silently removed).
 
 ## Configuration
 

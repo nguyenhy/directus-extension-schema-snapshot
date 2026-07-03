@@ -108,6 +108,8 @@ program
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--snapshot', 'write a single Directus snapshot JSON file instead of individual files')
+  .option('--snapshot-file <path>', 'write a single Directus snapshot JSON file to the specified path')
   .option('--json', 'output the extract view as JSON (for UI / programmatic use)')
   .action(cmdExtract);
 

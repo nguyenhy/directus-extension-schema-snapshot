@@ -9,20 +9,16 @@ const { readEventLog, writeEventLog, appendAddEvent, formatSyncMessage } = requi
  * "add" operation, independent of CLI vs UI. Callers (cmdAdd, a UI
  * backend, etc.) just choose how to render the returned view.
  *
- * When `snapshotsDir` is given, also dual-writes to the host-repo-tracked
- * event log (`schema-snapshots/`, see docs/proposal-schema-snapshot-sync.md
- * §2) — GitStore stays the local cache, `meta.json` becomes the sync-able
- * identity. The event id/hash are minted BEFORE the commit and the commit
- * message is stamped with them (same `sync: eN (hash)` format `sync`
- * writes on replay), so `list`/`resolve.js` see the durable identity the
- * instant `add` returns — no separate `sync` run required to make a
- * freshly added version resolvable. `message`, when given alongside
- * `snapshotsDir`, is stored on the event in `meta.json` instead of the
- * commit (see appendAddEvent's doc comment for why); the commit itself
- * always gets the stamped form so parsing stays unambiguous. Omit
- * `snapshotsDir` to keep the old GitStore-only behavior (e.g. existing
- * tests): no durable id exists in that mode, so `message` goes straight
- * into the commit as before.
+ * When `snapshotsDir` is given, also dual-writes to `schema-snapshots/`
+ * (see docs/architecture.md's "Schema-snapshots sync layer") — GitStore
+ * stays the local cache, `meta.json` becomes the sync-able identity. The
+ * event id/hash are minted before the commit and the commit is stamped
+ * with them (`sync: eN (hash)`, same format `sync` writes on replay), so
+ * `list`/`resolve.js` see the durable identity immediately, no separate
+ * `sync` run needed. `message` is stored on the `meta.json` event, not
+ * the commit — the commit's stamped form must parse unambiguously. Omit
+ * `snapshotsDir` to keep the old GitStore-only behavior: `message` goes
+ * straight into the commit, no durable id exists in that mode.
  * @param {{inputPath: string, schemaType: string, message?: string, store: import('../store/store').Store, parse: (filePath: string) => object, snapshotsDir?: string}} params
  *   `store` and `parse` are required — injected dependencies from
  *   core/env.js, never constructed here. See core/operations/show.js for

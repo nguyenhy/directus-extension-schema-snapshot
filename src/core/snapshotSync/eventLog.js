@@ -37,17 +37,11 @@ function nextEventId(log) {
 /**
  * Every `add` event currently active — the set backing `list`,
  * `resolveRef`, and `sync`'s replay. A `remove` event's `removes` field
- * always names the SPECIFIC event it undoes — the exact thing that was
- * on top when it was created — which can be either an `add` event
- * (ordinary removal) or ANOTHER `remove` event (undoing that specific
- * undo, produced when `remove --latest` runs again on top of a remove
- * commit — see core/operations/remove.js's removeLatestVersion). "undo"
- * always refers to the one action it names, never something further back
- * — e.g. add e1 -> remove e2 (removes e1) -> remove e3 (removes e2, NOT
- * e1) -> remove e4 (removes e3). To find whether the underlying `add`
- * event e1 is currently active, walk the chain: each link flips e1's
- * state once, so the parity of chain length (odd = inactive, even =
- * active) determines the final state.
+ * names the specific event it undoes (an `add`, or another `remove`,
+ * chaining — see docs/architecture.md's "Schema-snapshots sync layer" for
+ * the toggle-chain model). Walks each chain to its root `add` event and
+ * flips that add's active state once per link — final state is chain
+ * parity (odd length = inactive, even = active).
  * @param {{events: Array<object>}} log
  * @returns {object[]} active add events, in original log order
  */
@@ -130,16 +124,11 @@ function appendRemoveEvent(log, { hash, eventId }) {
 
 /**
  * Appends a `remove` event referencing `targetId` directly — no
- * active-only lookup/validation, unlike `appendRemoveEvent` above. Used
- * exclusively by `removeLatestVersion` (core/operations/remove.js) for
- * `remove --latest`'s repeat-toggle behavior: `targetId` is whatever
- * event id GitStore's current HEAD commit is stamped with — an `add`
- * event (ordinary removal) or a `remove` event (undoing that specific
- * undo). `appendRemoveEvent` can't be reused here because it only
- * resolves against `activeAddEvents`, restricted to currently-active
- * `add` events (correct for the `--hash`/`--id` explicit-target path,
- * wrong here — `targetId` may be a `remove` event, or an `add` event
- * that's currently inactive).
+ * active-only lookup/validation, unlike `appendRemoveEvent`. Used by
+ * `removeLatestVersion` (core/operations/remove.js), whose `targetId` is
+ * read straight off GitStore's current HEAD, so it's already known-valid
+ * and may be a `remove` event or a currently-inactive `add` — both of
+ * which `appendRemoveEvent`'s active-only lookup would reject.
  * @param {{events: Array<object>}} log - mutated in place (event pushed)
  * @param {string} targetId - "e<N>" of the specific event being undone
  * @returns {object} the appended event
@@ -204,9 +193,7 @@ const REMOVE_MESSAGE_RE = /^remove: (e\d+) \(removes (e\d+)\)$/;
 /**
  * @param {string} eventId - "e<N>" of the new tombstone event
  * @param {string} removedEventId - "e<N>" of the specific event it undoes
- *   — an `add` event, or another `remove` event (undoing that undo, see
- *   activeAddEvents' doc comment) — always the immediate one, never
- *   resolved through to some deeper original
+ *   (an `add` event, or another `remove` event — see activeAddEvents)
  * @returns {string} "remove: e2 (removes e1)"
  */
 function formatRemoveMessage(eventId, removedEventId) {
@@ -216,8 +203,7 @@ function formatRemoveMessage(eventId, removedEventId) {
 /**
  * @param {string} message - a GitStore commit message
  * @returns {{event: string, removes: string}|null} parsed tombstone event
- *   id + the specific event id it undoes (add or remove — see
- *   activeAddEvents), or null if the message isn't a remove commit
+ *   id + the specific event id it undoes, or null if not a remove commit
  */
 function parseRemoveMessage(message) {
   const m = REMOVE_MESSAGE_RE.exec(message || '');

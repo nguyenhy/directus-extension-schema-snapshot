@@ -13,6 +13,19 @@ require('dotenv').config({ quiet: true });
  *   `normalize`, overridable via SCHEMA_SNAPSHOT_SUBDIR_FORMAT (see
  *   .env.example). Default "{time}_{name}" sorts chronologically across
  *   all inputs — see utils/fsTree.js's runSubDir() for placeholder docs.
+ * @property {string} defaultStoreDir - where the git-backed version store
+ *   lives, overridable via SCHEMA_SNAPSHOT_STORE_DIR (see .env.example).
+ *   Separate git repo from the project's own — see core/store/git.js.
+ * @property {'git'} defaultStoreType - which Store implementation
+ *   core/env.js's createEnv() constructs, overridable via
+ *   SCHEMA_SNAPSHOT_STORE_TYPE (see .env.example). Must match a case in
+ *   core/env.js's createStore(). Only "git" exists today; this exists so
+ *   a future implementation is a config value away, not a code change.
+ * @property {'json'} defaultFileFormat - which Parser core/env.js's
+ *   createEnv() constructs, overridable via SCHEMA_SNAPSHOT_FILE_FORMAT
+ *   (see .env.example). Must match a key registered in
+ *   core/parsers/index.js. Only "json" exists today, same rationale as
+ *   defaultStoreType.
  */
 
 /** @type {Config} */
@@ -20,6 +33,9 @@ const config = {
   defaultOutDir: process.env.SCHEMA_SNAPSHOT_OUT_DIR || '.snapshot/normalized',
   defaultSchemaType: process.env.SCHEMA_SNAPSHOT_TYPE || 'directus',
   defaultSubdirFormat: process.env.SCHEMA_SNAPSHOT_SUBDIR_FORMAT || '{time}_{name}',
+  defaultStoreDir: process.env.SCHEMA_SNAPSHOT_STORE_DIR || '.snapshot/repo',
+  defaultStoreType: process.env.SCHEMA_SNAPSHOT_STORE_TYPE || 'git',
+  defaultFileFormat: process.env.SCHEMA_SNAPSHOT_FILE_FORMAT || 'json',
 };
 
 module.exports = config;

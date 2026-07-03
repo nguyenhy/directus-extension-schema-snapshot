@@ -8,11 +8,12 @@
   },
   "main": "./src/core/normalize.js",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/**/*.test.js"
   },
   "license": "MIT",
   "dependencies": {
     "commander": "15.0.0",
-    "dotenv": "17.4.2"
+    "dotenv": "17.4.2",
+    "simple-git": "3.36.0"
   }
 }

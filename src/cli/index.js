@@ -6,6 +6,10 @@ const { Command } = require('commander');
 const config = require('../config');
 const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
+const { cmdAdd } = require('./commands/add');
+const { cmdList } = require('./commands/list');
+const { cmdShow } = require('./commands/show');
+const { cmdRemove } = require('./commands/remove');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -23,19 +27,67 @@ program
   .option('--dry-run', 'print normalized tree to stdout, do not write files')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)
+  .option('--file-format <format>', 'which Parser to use for the input file (see core/parsers/index.js)', config.defaultFileFormat)
   .action(cmdNormalize);
 
 program
   .command('diff')
-  .description('structural diff between two schema JSON files (added/modified/removed)')
-  .argument('<schema_old.json>', 'path to older schema export')
-  .argument('<schema_new.json>', 'path to newer schema export')
+  .description('diff two schemas — file paths or committed version IDs (auto-detected)')
+  .argument('<a>', 'older schema: file path or commit SHA from `list`')
+  .argument('<b>', 'newer schema: file path or commit SHA from `list`')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--json', 'output the diff view as JSON (for UI / programmatic use)')
   .action(cmdDiff);
 
-try {
-  program.parse();
-} catch (err) {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
-}
+program
+  .command('add')
+  .description('normalize a schema JSON file and commit it as a new version (git-backed)')
+  .argument('<schema.json>', 'path to raw schema export')
+  .option('-m, --message <message>', 'commit message for this version')
+  .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for the input file (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--json', 'output the add view as JSON (for UI / programmatic use)')
+  .action(cmdAdd);
+
+program
+  .command('list')
+  .description('list all committed versions, newest first')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--json', 'output raw JSON array (for UI / programmatic use)')
+  .action(cmdList);
+
+program
+  .command('show')
+  .description('show all entities in a committed version')
+  .argument('<id>', 'commit SHA (full or short prefix from `list`)')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--json', 'output full EntityTree as JSON (for UI / programmatic use)')
+  .action(cmdShow);
+
+program
+  .command('remove')
+  .description('remove a version — safe, non-destructive (creates a revert commit, nothing is deleted)')
+  .option('--latest', 'remove the most recently committed version (the only supported mode today)')
+  .option('--yes', 'skip the confirmation prompt')
+  .option('--schema-type <type>', 'which normalizer to use for preview diffs (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for preview diffs (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--json', 'output the remove view as JSON (for UI / programmatic use)')
+  .action(cmdRemove);
+
+(async () => {
+  try {
+    await program.parseAsync();
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+})();

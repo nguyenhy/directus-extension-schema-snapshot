@@ -64,4 +64,28 @@ function writeTreeToDir(tree, dir) {
   }
 }
 
-module.exports = { runSubDir, writeTreeToDir, SUBDIR_PLACEHOLDERS };
+/**
+ * Inverse of writeTreeToDir(): reads a previously-written entity tree back
+ * from disk into the flat EntityTree shape. Used to recover "what was here
+ * before" without needing a separate stored copy (e.g. GitStore reads the
+ * working dir's current content, right before overwriting it, to diff
+ * against the incoming version).
+ * @param {string} dir - directory previously written by writeTreeToDir()
+ * @returns {import('../core/normalizers').EntityTree} empty object if dir doesn't exist yet
+ */
+function readTreeFromDir(dir) {
+  const tree = {};
+  if (!fs.existsSync(dir)) return tree;
+  for (const kind of fs.readdirSync(dir)) {
+    const kindDir = path.join(dir, kind);
+    if (!fs.statSync(kindDir).isDirectory()) continue;
+    for (const file of fs.readdirSync(kindDir)) {
+      if (!file.endsWith('.json')) continue;
+      const name = file.slice(0, -'.json'.length);
+      tree[`${kind}:${name}`] = JSON.parse(fs.readFileSync(path.join(kindDir, file), 'utf8'));
+    }
+  }
+  return tree;
+}
+
+module.exports = { runSubDir, writeTreeToDir, readTreeFromDir, SUBDIR_PLACEHOLDERS };

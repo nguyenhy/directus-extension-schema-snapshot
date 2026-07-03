@@ -1,8 +1,8 @@
 # Roadmap
 
-Ordered, each stage builds on the last. Only stage 1 (`normalize` + `diff`, CLI-only, no storage) is built — see [architecture.md](./architecture.md) and [cli-commands.md](./cli-commands.md) for current behavior.
+Ordered, each stage builds on the last. `normalize`, `diff`, and storage (stage 1 below) are built — see [architecture.md](./architecture.md) and [cli-commands.md](./cli-commands.md) for current behavior.
 
-1. **Storage, backend-agnostic** — a `Store` interface (`get`/`set`/`list`/`update`/`delete`) so versions can be persisted to a flat file, git commits, sqlite, or anything else, swappable without touching the CLI or `normalize`/`diff`. Adds `add` (store new version + auto-diff vs. prior), `list`/`log`, `show <ver>`, `export`/`import`.
+1. ~~**Storage, backend-agnostic**~~ — done. `Store` interface (`core/store/store.js`: `list`/`get`/`set`/`diffVersions`/`removeLatest`), `GitStore` (`core/store/git.js`) is the only implementation, every version = one commit. Adds `add`, `list`, `show <id>`, `remove --latest`. No `export`/`import` yet — not needed since `show --json` + `add` already round-trip a version.
 2. **Rename detection** — `renamed_candidates` in diff output: heuristic match on type + position, always flagged for human confirmation before being treated as a rename (prevents silently turning a rename into a destructive remove+add).
 3. **Extract** — generate a partial snapshot containing only added or only removed fields, usable as isolated migration units.
 4. **Migrate plan** — turn a diff into an ordered list of operations (collections → fields → relations for adds; reverse for removes), safe against FK ordering.

@@ -17,9 +17,9 @@ Schema snapshots as one giant JSON blob are hard to diff, hard to review in a PR
 
 ## Status
 
-**Implemented (stage 1):** `normalize` + `diff`, CLI only, no storage.
+**Implemented:** `normalize`, `diff`, `add`, `list`, `show`, `remove` — git-backed version storage (every version = one commit), CLI only.
 
-**Not yet built:** everything under [Roadmap](./docs/roadmap-draft.md) — no `add`/version storage, no rename detection, no migrate-plan/apply, no UI. Do not assume any of that exists in the code today.
+**Not yet built:** rename detection, extract, migrate-plan/apply, rollback plan, SQLite index, Web UI. See [Roadmap](./docs/roadmap-draft.md) for the ordered list — do not assume any of that exists in the code today.
 
 ## Install
 
@@ -33,11 +33,17 @@ Runs via `node src/cli/index.js <command>` (or `npm link` to expose the `schema-
 ## Commands
 
 - `normalize <schema.json> [--out-dir <dir>] [--dry-run]` — normalize a schema export into a canonical entity tree, written to disk by default.
-- `diff <schema_old.json> <schema_new.json>` — structural diff between two schema files (added/modified/removed).
+- `diff <a> <b>` — structural diff between two schemas (file paths or committed version ids, auto-detected).
+- `add <schema.json> [-m <message>]` — normalize + commit a new version to the store.
+- `list` — list all committed versions, newest first.
+- `show <id>` — show every entity in one committed version.
+- `remove --latest [--yes]` — non-destructively undo the most recent version (git revert).
 
 ```
 node src/cli/index.js normalize schema.json
 node src/cli/index.js diff v1.json v2.json
+node src/cli/index.js add schema.json -m "initial import"
+node src/cli/index.js list
 node src/cli/index.js --help
 ```
 
@@ -45,6 +51,7 @@ Full flag reference, output layout, and examples: [docs/cli-commands.md](./docs/
 
 ## More docs
 
-- [docs/architecture.md](./docs/architecture.md) — directory structure, configuration, error handling
+- [docs/architecture.md](./docs/architecture.md) — directory structure, flow, pluggable data structures (Normalizer/Parser/Store), configuration
 - [docs/cli-commands.md](./docs/cli-commands.md) — full command reference
 - [docs/roadmap-draft.md](./docs/roadmap-draft.md) — what's next, in order
+- [CLAUDE.md](./CLAUDE.md) — AI agent onboarding: conventions, invariants, where to look first

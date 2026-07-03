@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getNormalizer } = require('../normalizers');
-const { readEventLog, activeAddEvents, readSource } = require('../snapshotSync/eventLog');
+const { readEventLog, activeAddEvents, readSource, formatSyncMessage } = require('../snapshotSync/eventLog');
 const { contentHash } = require('../hash');
 
 function syncStatePath(storeDir) {
@@ -47,7 +47,7 @@ async function syncSnapshots({ snapshotsDir, schemaType, store, storeDir }) {
   for (const event of active) {
     const raw = readSource(snapshotsDir, event.hash);
     const tree = normalize(raw);
-    await store.set(tree, `sync: ${event.id} (${event.hash.slice(0, 7)})`, raw);
+    await store.set(tree, formatSyncMessage(event.id, event.hash), raw);
   }
 
   const syncedHash = contentHash(log);

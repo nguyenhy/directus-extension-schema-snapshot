@@ -50,13 +50,21 @@ function activeAddEvents(log) {
  * `source/<hash>.json` if not already present. Content-addressed: the
  * same hash is written once, re-adding it never overwrites the file (see
  * proposal §2, gap 3.6 — source/*.json is immutable once written).
+ *
+ * `message` is the user's free-text annotation (`add -m`). It's stored
+ * here, not in the GitStore commit message, because the commit message
+ * is machine-parsed (SYNC_MESSAGE_RE below) to recover the durable
+ * event/hash — there's no room in that exact-match string for free text
+ * too. Omitted from the event entirely when not given, so old logs and
+ * new ones without a message stay identical in shape.
  * @param {string} dir - schema-snapshots/ directory
  * @param {{events: Array<object>}} log - mutated in place (event pushed)
  * @param {string} hash - contentHash() of the normalized tree
  * @param {object} raw - original parsed source, written verbatim
+ * @param {string} [message] - user-supplied annotation for this version
  * @returns {object} the appended event
  */
-function appendAddEvent(dir, log, hash, raw) {
+function appendAddEvent(dir, log, hash, raw, message) {
   const sourceDir = path.join(dir, SOURCE_DIR);
   fs.mkdirSync(sourceDir, { recursive: true });
   const sourcePath = path.join(sourceDir, `${hash}.json`);
@@ -64,6 +72,7 @@ function appendAddEvent(dir, log, hash, raw) {
     fs.writeFileSync(sourcePath, JSON.stringify(raw, null, 2));
   }
   const event = { id: nextEventId(log), type: 'add', hash, at: new Date().toISOString() };
+  if (message) event.message = message;
   log.events.push(event);
   return event;
 }
@@ -107,12 +116,23 @@ function readSource(dir, hash) {
   return JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
 }
 
-// Matches the commit message core/operations/sync.js writes for each
-// replayed event: "sync: e2 (94c6dc9)" — the only place a GitStore commit
-// records which meta.json event/hash it came from. Shared by
-// present/list.js (display) and resolve.js (resolving event id/hash ->
-// commit id) so both stay in lockstep with sync.js's message format.
+// Matches the commit message format for a synced event: "sync: e2 (94c6dc9)"
+// — the only shape a GitStore commit uses to record which meta.json
+// event/hash it came from. Written by both core/operations/add.js (at
+// commit time, when snapshotsDir is given) and core/operations/sync.js
+// (on replay) via formatSyncMessage() below, so the two can never drift.
+// Read by present/list.js (display) and resolve.js (resolving event
+// id/hash -> commit id).
 const SYNC_MESSAGE_RE = /^sync: (e\d+) \(([0-9a-f]{7,64})\)$/;
+
+/**
+ * @param {string} eventId - "e<N>"
+ * @param {string} hash - full contentHash() hex string
+ * @returns {string} "sync: e2 (94c6dc9)" — hash truncated to 7 chars
+ */
+function formatSyncMessage(eventId, hash) {
+  return `sync: ${eventId} (${hash.slice(0, 7)})`;
+}
 
 /**
  * @param {string} message - a GitStore commit message
@@ -133,5 +153,7 @@ module.exports = {
   appendAddEvent,
   appendRemoveEvent,
   readSource,
+  nextEventId,
+  formatSyncMessage,
   parseSyncMessage,
 };

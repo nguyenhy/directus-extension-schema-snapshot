@@ -13,7 +13,7 @@ const { printListView } = require('../render/list');
  * Machine output (--json): the same derived view as JSON — UI integrations
  * should use this flag instead of screen-scraping console output.
  *
- * @param {{storeDir: string, storeType: string, json?: boolean}} options
+ * @param {{storeDir: string, storeType: string, showCacheRef?: boolean, json?: boolean}} options
  */
 async function cmdList(options) {
   const { store } = createEnv({ storeDir: options.storeDir, storeType: options.storeType });
@@ -24,7 +24,7 @@ async function cmdList(options) {
     return;
   }
 
-  printListView(view);
+  printListView(view, { showCacheRef: options.showCacheRef });
 }
 
 module.exports = { cmdList };

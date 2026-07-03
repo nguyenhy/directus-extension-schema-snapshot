@@ -40,6 +40,17 @@
  *   readable via get()/list() afterward (GitStore implements this as a
  *   revert commit, never history rewrite/deletion). Throws if the store
  *   has no versions yet.
+ *
+ * @property {function(): Promise<void>} reset
+ *   Wipes ALL history in this store and leaves it empty but usable
+ *   (get()/set() etc. work immediately after, no re-construction needed).
+ *   Unlike every other method here, this IS destructive by design — it
+ *   exists for `core/operations/sync.js`, which treats this store as a
+ *   disposable, fully-rebuildable cache of `schema-snapshots/meta.json`
+ *   (see docs/proposal-schema-snapshot-sync.md). Callers must only call
+ *   this on a store they know is being rebuilt from another source of
+ *   truth immediately after, never on a store that's the only copy of
+ *   its data.
  */
 
 module.exports = {};

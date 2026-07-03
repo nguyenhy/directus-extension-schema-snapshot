@@ -1,4 +1,5 @@
 const { buildRemoveView } = require('../present/remove');
+const { readEventLog, writeEventLog, appendRemoveEvent } = require('../snapshotSync/eventLog');
 
 /**
  * Removes the most recently committed version — the full "remove --latest"
@@ -15,4 +16,21 @@ async function removeLatestVersion({ store }) {
   return buildRemoveView(id, revertedId, previousTree, tree);
 }
 
-module.exports = { removeLatestVersion };
+/**
+ * Appends a tombstone `remove` event to `schema-snapshots/meta.json` for a
+ * hash or explicit event id — never touches `source/*.json`, never
+ * rewrites prior events (proposal gap 3.6). Distinct from
+ * removeLatestVersion() (git-revert based, local GitStore cache only);
+ * this is the sync-able, cross-device removal path (proposal gap 3.4).
+ * @param {{snapshotsDir: string, hash?: string, eventId?: string}} params
+ * @returns {object} the appended remove event
+ * @throws {Error} if no active add event matches hash/eventId
+ */
+function removeSnapshotEvent({ snapshotsDir, hash, eventId }) {
+  const log = readEventLog(snapshotsDir);
+  const event = appendRemoveEvent(log, { hash, eventId });
+  writeEventLog(snapshotsDir, log);
+  return event;
+}
+
+module.exports = { removeLatestVersion, removeSnapshotEvent };

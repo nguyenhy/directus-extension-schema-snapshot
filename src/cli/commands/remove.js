@@ -1,6 +1,6 @@
 const readline = require('node:readline/promises');
 const { createEnv } = require('../../core/env');
-const { removeLatestVersion } = require('../../core/operations/remove');
+const { removeLatestVersion, removeSnapshotEvent } = require('../../core/operations/remove');
 const { getVersionView } = require('../../core/operations/show');
 const { diffSchemas } = require('../../core/operations/diff');
 const { buildListView } = require('../../core/present/list');
@@ -62,11 +62,27 @@ async function confirm(message, previewParams) {
  * Step 6 (`remove <id> --force`, destructive git reset --hard) is
  * intentionally not built — only add it if --latest proves insufficient
  * in practice.
- * @param {{latest?: boolean, yes?: boolean, schemaType: string, storeDir: string, storeType: string, fileFormat: string, json?: boolean}} options
+ *
+ * `--hash <hash>` / `--id <eventId>` are a separate, sync-able removal
+ * path: append a tombstone event to schema-snapshots/meta.json (see
+ * core/operations/remove.js's removeSnapshotEvent, proposal gap 3.4/3.6).
+ * Mutually exclusive with `--latest` — different mechanisms, different
+ * store.
+ * @param {{latest?: boolean, hash?: string, id?: string, yes?: boolean, schemaType: string, storeDir: string, storeType: string, fileFormat: string, snapshotsDir: string, json?: boolean}} options
  */
 async function cmdRemove(options) {
+  if (options.hash || options.id) {
+    const event = removeSnapshotEvent({ snapshotsDir: options.snapshotsDir, hash: options.hash, eventId: options.id });
+    if (options.json) {
+      process.stdout.write(JSON.stringify(event, null, 2) + '\n');
+      return;
+    }
+    console.log(`Removed event ${event.removes} (tombstone ${event.id})`);
+    return;
+  }
+
   if (!options.latest) {
-    throw new Error('Specify --latest (the only supported removal mode today)');
+    throw new Error('Specify --latest, --hash <hash>, or --id <eventId>');
   }
 
   const { store, parse } = createEnv({ storeDir: options.storeDir, storeType: options.storeType, fileFormat: options.fileFormat });

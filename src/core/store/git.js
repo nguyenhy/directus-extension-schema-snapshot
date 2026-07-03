@@ -90,6 +90,20 @@ class GitStore {
   }
 
   /**
+   * Wipes this store's directory entirely (including .git) and
+   * reinitializes it empty — see store.js's `reset` contract doc for why
+   * this is safe here (rebuildable cache) and unsafe in general. Only
+   * caller today is core/operations/sync.js.
+   * @returns {Promise<void>}
+   */
+  async reset() {
+    fs.rmSync(this.dir, { recursive: true, force: true });
+    fs.mkdirSync(this.dir, { recursive: true });
+    this.git = simpleGit(this.dir);
+    await this.init();
+  }
+
+  /**
    * Returns all committed versions, newest first.
    * Returns [] when the repo has no commits yet.
    * @returns {Promise<{id: string, timestamp: string, message: string}[]>}

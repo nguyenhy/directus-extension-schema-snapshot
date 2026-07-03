@@ -26,6 +26,11 @@ require('dotenv').config({ quiet: true });
  *   (see .env.example). Must match a key registered in
  *   core/parsers/index.js. Only "json" exists today, same rationale as
  *   defaultStoreType.
+ * @property {string} defaultSnapshotsDir - host-repo-tracked event log +
+ *   content-addressed source dir (see docs/proposal-schema-snapshot-sync.md
+ *   §2), overridable via SCHEMA_SNAPSHOT_SNAPSHOTS_DIR. Distinct from
+ *   defaultStoreDir: this one IS meant to be committed by the host repo's
+ *   own git, defaultStoreDir is not.
  */
 
 /** @type {Config} */
@@ -36,6 +41,7 @@ const config = {
   defaultStoreDir: process.env.SCHEMA_SNAPSHOT_STORE_DIR || '.snapshot/repo',
   defaultStoreType: process.env.SCHEMA_SNAPSHOT_STORE_TYPE || 'git',
   defaultFileFormat: process.env.SCHEMA_SNAPSHOT_FILE_FORMAT || 'json',
+  defaultSnapshotsDir: process.env.SCHEMA_SNAPSHOT_SNAPSHOTS_DIR || 'schema-snapshots',
 };
 
 module.exports = config;

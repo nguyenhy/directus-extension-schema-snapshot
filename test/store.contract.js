@@ -103,6 +103,15 @@ function runStoreContractTests(label, makeStore) {
     assert.equal(backward.idOld, idA);
     assert.equal(backward.idNew, idB);
   });
+
+  test(`${label}: reset() wipes all history, store usable immediately after`, async () => {
+    const store = makeStore();
+    await store.set({ 'collection:a': { collection: 'a' } }, 'first');
+    await store.reset();
+    assert.deepEqual(await store.list(), []);
+    const { id } = await store.set({ 'collection:b': { collection: 'b' } }, 'after reset');
+    assert.deepEqual(await store.get(id), { 'collection:b': { collection: 'b' } });
+  });
 }
 
 module.exports = { runStoreContractTests };

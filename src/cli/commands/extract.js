@@ -1,6 +1,7 @@
 const path = require('path');
 const { createEnv } = require('../../core/env');
 const { extractSchemas } = require('../../core/operations/extract');
+const { resolveArgOrFile } = require('../../core/snapshotSync/resolve');
 const { printExtractView, printVerification } = require('../render/extract');
 
 /**
@@ -9,19 +10,33 @@ const { printExtractView, printVerification } = require('../render/extract');
  * backend too — same file-vs-version auto-detection as `diff`), then
  * chooses whether to print or JSON-dump the view.
  *
+ * Non-file args are event ids or content hashes by default, resolved
+ * through schema-snapshots/meta.json (see core/snapshotSync/resolve.js,
+ * same treatment as `diff`). Pass `--cache-ref` to treat non-file args as
+ * raw GitStore commit shas instead.
+ *
  * On a real (non-dry-run) --snapshot/--snapshot-file write, a failed merge
  * verification throws (see below) so the file was still written to disk but
  * the CLI reports failure — this repo's "non-destructive" guarantee doesn't
  * extend to "never writes a wrong file," only to never destroying history.
  * @param {string} oldSchema
  * @param {string} newSchema
- * @param {{mode: 'added'|'removed'|'modified', schemaType: string, storeDir: string, storeType: string, fileFormat: string, outDir: string, subdirFormat: string, dryRun?: boolean, json?: boolean, snapshot?: boolean, snapshotFile?: string}} options
+ * @param {{mode: 'added'|'removed'|'modified', schemaType: string, storeDir: string, storeType: string, fileFormat: string, snapshotsDir: string, cacheRef?: boolean, outDir: string, subdirFormat: string, dryRun?: boolean, json?: boolean, snapshot?: boolean, snapshotFile?: string}} options
  */
 async function cmdExtract(oldSchema, newSchema, options) {
   const { store, parse } = createEnv({ storeDir: options.storeDir, storeType: options.storeType, fileFormat: options.fileFormat });
+
+  // Fetch store.list() once and share it — see cmdDiff's identical note.
+  const versions = options.cacheRef ? undefined : await store.list();
+  const resolveOpts = { snapshotsDir: options.snapshotsDir, store, cacheRef: options.cacheRef, versions };
+  const [resolvedOld, resolvedNew] = await Promise.all([
+    resolveArgOrFile(oldSchema, resolveOpts),
+    resolveArgOrFile(newSchema, resolveOpts),
+  ]);
+
   const result = await extractSchemas({
-    oldSchema,
-    newSchema,
+    oldSchema: resolvedOld,
+    newSchema: resolvedNew,
     mode: options.mode,
     schemaType: options.schemaType,
     outDir: options.outDir,

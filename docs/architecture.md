@@ -1,6 +1,6 @@
 # Architecture
 
-Status: `normalize`, `diff`, `add`, `list`, `show`, `remove` all implemented. Storage is git-backed (`GitStore`). See [roadmap-draft.md](./roadmap-draft.md) for what's still ahead (rename detection, migrate-plan/apply, Web UI).
+Status: `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `extract`, `sync`, `status` all implemented. Storage is **dual**: `.snapshot/repo` (git-backed `GitStore`, local-only, disposable/rebuildable cache) plus `schema-snapshots/` (host-repo-tracked event log + content-addressed source — the sync-able source of truth, see "Schema-snapshots sync layer" below). See [roadmap-draft.md](./roadmap-draft.md) for what's still ahead (rename detection, migrate-plan/apply, Web UI, auto/manual sync toggle).
 
 ## Directory structure
 
@@ -11,6 +11,18 @@ src/
 
     diff.js                   diff(treeOld, treeNew) -> DiffResult
                                Generic tree-diff. No Directus knowledge, no I/O.
+
+    hash.js                    contentHash(value) -> sha256 hex. Deterministic, sorted-key
+                               JSON hash — the public, cross-device snapshot identity (see
+                               "Schema-snapshots sync layer" below).
+
+    snapshotSync/
+      eventLog.js               readEventLog/writeEventLog/appendAddEvent/appendRemoveEvent/
+                               activeAddEvents/readSource/parseSyncMessage — schema-snapshots/
+                               meta.json + source/ read-write, and the fold-to-active-set logic.
+      resolve.js                resolveRef/resolveArgOrFile — event id ("e3") or content hash ->
+                               local GitStore commit id, via meta.json + sync-produced commit
+                               messages. The only place that translation happens.
 
     directus/
       normalize.js             normalize(rawSchema) -> EntityTree
@@ -30,13 +42,20 @@ src/
                                 version = one commit of the full tree.
 
     operations/                One file per command's actual logic (normalize/diff/add/list/
-                                show/remove/extract). Pure orchestration: call normalizer/parser/store,
-                                build a view via present/, return it. No console.log, no
-                                process.exit, no commander. Reusable by a UI backend.
+                                show/get/remove/extract/sync/status). Pure orchestration: call
+                                normalizer/parser/store, build a view via present/, return it.
+                                No console.log, no process.exit, no commander. Reusable by a
+                                UI backend.
       extract.js               Extracts a partial EntityTree of added, removed, or modified entities.
                                 Also exports mergeIntoOld() (reconstructs a full tree for
                                 --snapshot/--snapshot-file) and verifyMerge() (re-diffs the
                                 reconstruction to confirm it matches the extracted mode's keys).
+      sync.js                   syncSnapshots() — wipes .snapshot/repo and rebuilds it from
+                                schema-snapshots/meta.json's active events, every call (not
+                                incremental). readSyncState/writeSyncState manage
+                                .snapshot/sync-state.json ({syncedHash} only).
+      status.js                 statusView() — read-only meta.json-hash vs sync-state.json
+                                comparison.
 
     present/                    One file per command's view-builder: turns operation output
                                 into a plain, render-agnostic object (JSON-serializable,
@@ -172,6 +191,18 @@ Passing `--no-dry-run` writes the extracted entities to disk. It reuses `utils/f
 - **GOTCHA**: `verifyMerge`'s unexpected-key logic assumes extraction is single-mode — for the two non-matching categories, the entire diff result for that category counts as "unexpected," not just entries outside the expected set. This holds today because `expectedKeys` is always empty for non-matching categories; if mixed-mode merges are ever supported, `verifyMerge` needs updating (see its doc comment).
 - **Failure consequence**: dry-run prints the `✗` line but leaves the exit code untouched (nothing was written). A real (`--no-dry-run`) write writes the file first, then throws if verification fails — caught by `cli/index.js`'s central handler, printed as `Error: ...`, exit code `1`. The bad file stays on disk for inspection; nothing is auto-deleted (consistent with this repo's "non-destructive by construction" ethos — the file, once written, is never silently removed).
 
+## Schema-snapshots sync layer
+
+Full rationale/history: [proposal-schema-snapshot-sync.md](./proposal-schema-snapshot-sync.md) (§2 for the design, §5 for where the shipped code diverges from the original plan).
+
+- **`.snapshot/repo`** (`GitStore`) — local-only, gitignored, disposable. Never synced across devices directly. Only used internally for `diffVersions()`/`get()`/`getRaw()` reads and `remove --latest`'s revert.
+- **`schema-snapshots/`** — host-repo-tracked (committed by the project's own git, not gitignored): `meta.json` (append-only event log: `add`/`remove` events with `id`s, `remove` events reference an `add` event's `id` via `removes`, never a hash) + `source/<contentHash>.json` (raw source, content-addressed, immutable once written). This is the sync-able source of truth.
+- **`add`** dual-writes both: commits to `.snapshot/repo` directly (as before this layer existed) *and*, when `--snapshots-dir` is set (default: on), appends an event + source file to `schema-snapshots/`.
+- **`sync`** rebuilds `.snapshot/repo` from `schema-snapshots/meta.json`, unconditionally wiping the store dir first (`core/operations/sync.js`'s `wipeStore()`) and replaying every active `add` event as a fresh commit, message `sync: <eventId> (<hash7>)`. Not incremental — every call is a full teardown/rebuild, chosen after an incremental first attempt double-committed events `add` had already written directly (see proposal §5.1).
+- **Resolution** (`core/snapshotSync/resolve.js`'s `resolveRef`): `show`/`get`/`diff`/`extract` accept an event id or content hash by default; resolution parses `sync`-produced commit messages (`parseSyncMessage()` in `eventLog.js`) to find the matching `.snapshot/repo` commit. This only works for events already `sync`ed — a fresh `add` isn't resolvable by its own hash until `sync` runs, since `add`'s own direct commit message isn't in `sync: eN (hash)` form.
+- **`--cache-ref`**: explicit opt-in on `show`/`get`/`diff`/`extract` to bypass resolution and use a raw `.snapshot/repo` commit sha directly — never auto-detected (a short content hash and a short git sha are the same hex shape).
+- **`status`**: read-only, compares `contentHash(meta.json)` against `.snapshot/sync-state.json`'s `syncedHash` (written by the last `sync`).
+
 ## Configuration
 
 Copy `.env.example` to `.env` to override defaults. All vars optional; explicit CLI flags always win.
@@ -181,9 +212,10 @@ Copy `.env.example` to `.env` to override defaults. All vars optional; explicit 
 | `SCHEMA_SNAPSHOT_OUT_DIR` | `.snapshot/normalized` | `normalize`/`extract`'s default `--out-dir` |
 | `SCHEMA_SNAPSHOT_TYPE` | `directus` | `normalize`/`diff`/`add`/`remove`/`extract`'s default `--schema-type` |
 | `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` | `{time}_{name}` | `normalize`/`extract`'s default `--subdir-format` |
-| `SCHEMA_SNAPSHOT_STORE_DIR` | `.snapshot/repo` | `diff`/`add`/`list`/`show`/`remove`/`extract`'s default `--store-dir` |
+| `SCHEMA_SNAPSHOT_STORE_DIR` | `.snapshot/repo` | `diff`/`add`/`list`/`show`/`remove`/`extract`/`sync`/`status`'s default `--store-dir` |
 | `SCHEMA_SNAPSHOT_STORE_TYPE` | `git` | default `--store-type` (only `git` registered) |
 | `SCHEMA_SNAPSHOT_FILE_FORMAT` | `json` | default `--file-format` (only `json` registered) |
+| `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR` | `schema-snapshots` | `add`/`show`/`get`/`diff`/`extract`/`remove`/`sync`/`status`'s default `--snapshots-dir` (see "Schema-snapshots sync layer") |
 
 Loaded once at CLI startup via `src/config.js` (`dotenv`).
 

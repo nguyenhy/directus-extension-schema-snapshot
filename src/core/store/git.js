@@ -65,6 +65,22 @@ class GitStore {
   }
 
   /**
+   * Returns the unix timestamp (ms) of a commit. Used to auto-sort diff args.
+   * Returns null if id is not a store version (e.g. it's a file path).
+   * @param {string} id - commit SHA (full or short)
+   * @returns {Promise<number|null>}
+   */
+  async commitTime(id) {
+    try {
+      const raw = await this.git.raw(['log', '-1', '--format=%at', id]);
+      const secs = parseInt(raw.trim(), 10);
+      return isNaN(secs) ? null : secs * 1000;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Reads the full EntityTree for a given commit id (short or full SHA).
    * Reconstructs directly from git objects — no checkout, no temp dir.
    * Path shape in the store is "kind/name.json" (written by writeTreeToDir),
@@ -86,6 +102,27 @@ class GitStore {
       tree[`${kind}:${name}`] = JSON.parse(content);
     }
     return tree;
+  }
+
+  /**
+   * Diffs two committed versions. Auto-sorts by commit timestamp so
+   * diffVersions(new, old) === diffVersions(old, new) — always old→new.
+   * @param {string} idA - commit SHA (full or short)
+   * @param {string} idB - commit SHA (full or short)
+   * @returns {Promise<{
+   *   result: import('../diff').DiffResult,
+   *   treeOld: import('../normalizers').EntityTree,
+   *   treeNew: import('../normalizers').EntityTree,
+   *   idOld: string,
+   *   idNew: string,
+   * }>}
+   */
+  async diffVersions(idA, idB) {
+    const { diff } = require('../diff');
+    const [timeA, timeB] = await Promise.all([this.commitTime(idA), this.commitTime(idB)]);
+    const [idOld, idNew] = timeA <= timeB ? [idA, idB] : [idB, idA];
+    const [treeOld, treeNew] = await Promise.all([this.get(idOld), this.get(idNew)]);
+    return { result: diff(treeOld, treeNew), treeOld, treeNew, idOld, idNew };
   }
 
   /**

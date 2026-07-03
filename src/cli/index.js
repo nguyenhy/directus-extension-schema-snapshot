@@ -30,10 +30,11 @@ program
 
 program
   .command('diff')
-  .description('structural diff between two schema JSON files (added/modified/removed)')
-  .argument('<schema_old.json>', 'path to older schema export')
-  .argument('<schema_new.json>', 'path to newer schema export')
+  .description('diff two schemas — file paths or committed version IDs (auto-detected)')
+  .argument('<a>', 'older schema: file path or commit SHA from `list`')
+  .argument('<b>', 'newer schema: file path or commit SHA from `list`')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .action(cmdDiff);
 
 program

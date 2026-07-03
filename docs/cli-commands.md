@@ -76,6 +76,19 @@ Shows every entity in one committed version (`<id>` = full or short commit SHA f
 schema-snapshot show abc1234
 ```
 
+## `schema-snapshot get <id> [--store-dir <dir>] [--store-type <type>] [--out-file <path>] [--json]`
+
+Retrieves the **original raw source exactly as committed by `add`** — no reconstruction, no `denormalize`, no merge. Contrast with `show` (reassembles the normalized `EntityTree`) and `extract --snapshot` (overlays a delta onto an old tree). Requires the version to have been committed with a raw source (`add` stores it as `_source.json` in the same commit) — throws if absent, e.g. for versions committed before this capability existed.
+
+- **`--out-file <path>`**: write the raw source to this file instead of stdout.
+- **`--json`**: output `{id, raw}` as JSON (for UI / programmatic use) instead of just the raw source.
+
+```
+schema-snapshot get abc1234
+schema-snapshot get abc1234 --out-file v1.json
+schema-snapshot get abc1234 --json
+```
+
 ## `schema-snapshot remove --latest [--yes] [--schema-type <type>] [--store-dir <dir>] [--store-type <type>] [--file-format <format>] [--json]`
 
 Removes the most recently committed version — **non-destructive**: implemented as a `git revert`, a new commit undoing the last one. Nothing is deleted or history-rewritten; the reverted version stays fully readable via `get`/`show`/`list` afterward.

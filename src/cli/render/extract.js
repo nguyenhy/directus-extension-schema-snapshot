@@ -7,7 +7,27 @@ function printExtractView(view) {
   for (const key of view.keys) {
     console.log(`${prefix} ${key}`);
   }
-  console.log(`\n${view.count} ${view.mode} -> ${view.dir}`);
+  const target = view.file || view.dir;
+  console.log(`\n${view.count} ${view.mode}${view.file ? ' snapshot' : ''} -> ${target}`);
+  if (view.verification) printVerification(view.verification);
 }
 
-module.exports = { printExtractView };
+/**
+ * Prints a pass/fail line for a merge verification result (see
+ * core/operations/extract.js's verifyMerge).
+ * @param {{ok: boolean, unexpectedAdded: string[], unexpectedRemoved: string[], unexpectedModified: string[], missingKeys: string[]}} verification
+ */
+function printVerification(verification) {
+  if (verification.ok) {
+    console.log('✓ merge verified');
+    return;
+  }
+  const details = [];
+  if (verification.unexpectedAdded.length) details.push(`unexpectedAdded: ${verification.unexpectedAdded.join(', ')}`);
+  if (verification.unexpectedRemoved.length) details.push(`unexpectedRemoved: ${verification.unexpectedRemoved.join(', ')}`);
+  if (verification.unexpectedModified.length) details.push(`unexpectedModified: ${verification.unexpectedModified.join(', ')}`);
+  if (verification.missingKeys.length) details.push(`missingKeys: ${verification.missingKeys.join(', ')}`);
+  console.log(`✗ merge verification failed: ${details.join('; ')}`);
+}
+
+module.exports = { printExtractView, printVerification };

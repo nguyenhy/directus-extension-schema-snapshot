@@ -6,6 +6,10 @@ Agent-facing entry point. Read this first, then [docs/architecture.md](./docs/ar
 
 CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, extracts partial snapshots (added/removed/modified), and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
 
+## Tooling
+
+`.codegraph/` present at repo root — for any "how does X work" / "where is Y" / "who calls Z" question, use CodeGraph before `Read`/`Grep`/`cat`. In Claude Code, CodeGraph's MCP tools are deferred (schema not loaded by default) — call `ToolSearch("select:codegraph_explore,codegraph_node,codegraph_callers,codegraph_search")` once at session start to load them, then prefer `codegraph_explore` over reading whole files. If CodeGraph tools are unavailable, fall back to `codegraph explore "<symbol>"` / `codegraph node <symbol>` via shell.
+
 ## Before touching code
 
 1. Read [docs/architecture.md](./docs/architecture.md) "Flow" section — every command is `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view) → `cli/render` (print). Don't collapse these layers or put console.log/process.exit in `core/` (e.g. `add`, `diff`, `extract`).

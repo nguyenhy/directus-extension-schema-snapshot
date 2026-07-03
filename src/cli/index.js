@@ -7,6 +7,7 @@ const config = require('../config');
 const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
+const { cmdList } = require('./commands/list');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -42,6 +43,13 @@ program
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .action(cmdAdd);
+
+program
+  .command('list')
+  .description('list all committed versions, newest first')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--json', 'output raw JSON array (for UI / programmatic use)')
+  .action(cmdList);
 
 (async () => {
   try {

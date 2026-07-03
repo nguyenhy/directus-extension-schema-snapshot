@@ -34,10 +34,34 @@ class GitStore {
 
   /** Ensures dir is a git repo. Safe to call repeatedly. */
   async init() {
-    const isRepo = await this.git.checkIsRepo();
-    if (!isRepo) {
+    // checkIsRepo() returns true if inside ANY parent git repo — can't use it.
+    // Check for own .git/ instead so we always init the store's own repo.
+    const hasOwnGit = fs.existsSync(path.join(this.dir, '.git'));
+    if (!hasOwnGit) {
       await this.git.init();
     }
+  }
+
+  /**
+   * Returns all committed versions, newest first.
+   * Returns [] when the repo has no commits yet.
+   * @returns {Promise<{id: string, timestamp: string, message: string}[]>}
+   */
+  async list() {
+    await this.init();
+    let log;
+    try {
+      log = await this.git.log();
+    } catch {
+      // no commits yet — simple-git throws on empty repos
+      return [];
+    }
+    if (!log || !log.all || log.all.length === 0) return [];
+    return log.all.map((entry) => ({
+      id: entry.hash,
+      timestamp: entry.date,
+      message: entry.message,
+    }));
   }
 
   /**

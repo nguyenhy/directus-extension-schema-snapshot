@@ -2,6 +2,8 @@ const { parseFile } = require('../../utils/parse');
 const { getNormalizer } = require('../../core/normalizers');
 const { diff } = require('../../core/diff');
 const { GitStore } = require('../../core/store/git');
+const { buildAddView } = require('../../core/present/add');
+const { printAddView } = require('../render/add');
 
 /**
  * commander action handler for `add <schema.json>`.
@@ -10,7 +12,7 @@ const { GitStore } = require('../../core/store/git');
  * against whatever was the previous version (empty tree on the very
  * first add).
  * @param {string} inputPath - schema.json argument from the CLI
- * @param {{schemaType: string, storeDir: string, message?: string}} options - commander-parsed options
+ * @param {{schemaType: string, storeDir: string, message?: string, json?: boolean}} options - commander-parsed options
  */
 async function cmdAdd(inputPath, options) {
   const { normalize } = getNormalizer(options.schemaType);
@@ -20,13 +22,13 @@ async function cmdAdd(inputPath, options) {
   const { id, message, previousTree } = await store.set(tree, options.message);
 
   const result = diff(previousTree, tree);
-  console.log(`Version ${id.slice(0, 7)} added${message !== '(no message)' ? ` (${message})` : ''}.`);
-  for (const key of result.added) console.log(`+ ${key}`);
-  for (const { key, changes } of result.modified) {
-    console.log(`~ ${key}`);
-    for (const c of changes) console.log(`    ${c.path}: ${JSON.stringify(c.from)} -> ${JSON.stringify(c.to)}`);
+  const view = buildAddView(id, message, result, previousTree, tree);
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(view, null, 2) + '\n');
+    return;
   }
-  for (const key of result.removed) console.log(`- ${key}`);
+  printAddView(view);
 }
 
 module.exports = { cmdAdd };

@@ -3,6 +3,8 @@ const path = require('path');
 const { parseFile } = require('../../utils/parse');
 const { getNormalizer } = require('../../core/normalizers');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
+const { buildNormalizeView } = require('../../core/present/normalize');
+const { printNormalizeView } = require('../render/normalize');
 const pkg = require('../../../package.json');
 
 /**
@@ -65,7 +67,7 @@ function cmdNormalize(inputPath, options) {
   fs.copyFileSync(inputPath, path.join(dir, `original${path.extname(inputPath)}`));
   writeTreeToDir(tree, dir);
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(buildMeta(tree, inputPath), null, 2) + '\n');
-  console.log(`Normalized ${Object.keys(tree).length} entities -> ${dir}`);
+  printNormalizeView(buildNormalizeView(tree, dir));
 }
 
 module.exports = { cmdNormalize, buildMeta };

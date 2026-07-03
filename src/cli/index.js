@@ -35,6 +35,7 @@ program
   .argument('<b>', 'newer schema: file path or commit SHA from `list`')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--json', 'output the diff view as JSON (for UI / programmatic use)')
   .action(cmdDiff);
 
 program
@@ -44,6 +45,7 @@ program
   .option('-m, --message <message>', 'commit message for this version')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--json', 'output the add view as JSON (for UI / programmatic use)')
   .action(cmdAdd);
 
 program

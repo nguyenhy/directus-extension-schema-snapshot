@@ -65,6 +65,30 @@ class GitStore {
   }
 
   /**
+   * Reads the full EntityTree for a given commit id (short or full SHA).
+   * Reconstructs directly from git objects — no checkout, no temp dir.
+   * Path shape in the store is "kind/name.json" (written by writeTreeToDir),
+   * which maps back to entityKey format "kind:name".
+   * @param {string} id - commit SHA (full or unambiguous prefix)
+   * @returns {Promise<import('../normalizers').EntityTree>}
+   * @throws if id doesn't resolve to a commit in this store
+   */
+  async get(id) {
+    await this.init();
+    const rawFiles = await this.git.raw(['ls-tree', '-r', '--name-only', id]);
+    const files = rawFiles.trim().split('\n').filter((f) => f.endsWith('.json'));
+    const tree = {};
+    for (const filePath of files) {
+      const content = await this.git.show([`${id}:${filePath}`]);
+      const slashIdx = filePath.indexOf('/');
+      const kind = filePath.slice(0, slashIdx);
+      const name = filePath.slice(slashIdx + 1, -'.json'.length);
+      tree[`${kind}:${name}`] = JSON.parse(content);
+    }
+    return tree;
+  }
+
+  /**
    * Commits a new version. First commit in an empty repo is the base
    * version; every commit after that is still a full tree (git computes
    * the diff internally, nothing here needs to know or care).

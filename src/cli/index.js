@@ -8,6 +8,7 @@ const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
 const { cmdList } = require('./commands/list');
+const { cmdShow } = require('./commands/show');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -50,6 +51,14 @@ program
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .option('--json', 'output raw JSON array (for UI / programmatic use)')
   .action(cmdList);
+
+program
+  .command('show')
+  .description('show all entities in a committed version')
+  .argument('<id>', 'commit SHA (full or short prefix from `list`)')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--json', 'output full EntityTree as JSON (for UI / programmatic use)')
+  .action(cmdShow);
 
 (async () => {
   try {

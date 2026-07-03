@@ -72,6 +72,21 @@ function runStoreContractTests(label, makeStore) {
     assert.equal(versions.length, 3);
   });
 
+  test(`${label}: set() with raw stores it, getRaw() retrieves it verbatim`, async () => {
+    const store = makeStore();
+    const tree = { 'collection:orders': { collection: 'orders' } };
+    const raw = { collections: [{ collection: 'orders' }], note: 'original source' };
+    const { id } = await store.set(tree, 'first', raw);
+    assert.deepEqual(await store.getRaw(id), raw);
+  });
+
+  test(`${label}: getRaw() throws a clean error when no raw source was stored`, async () => {
+    const store = makeStore();
+    const tree = { 'collection:orders': { collection: 'orders' } };
+    const { id } = await store.set(tree, 'first');
+    await assert.rejects(() => store.getRaw(id), /No raw source stored/);
+  });
+
   test(`${label}: diffVersions() always returns old→new regardless of argument order`, async () => {
     const store = makeStore();
     const treeA = { 'collection:a': { collection: 'a' } };

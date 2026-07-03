@@ -9,6 +9,7 @@ const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
 const { cmdList } = require('./commands/list');
 const { cmdShow } = require('./commands/show');
+const { cmdGet } = require('./commands/get');
 const { cmdRemove } = require('./commands/remove');
 const { cmdExtract } = require('./commands/extract');
 const pkg = require('../../package.json');
@@ -71,6 +72,16 @@ program
   .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--json', 'output full EntityTree as JSON (for UI / programmatic use)')
   .action(cmdShow);
+
+program
+  .command('get')
+  .description('retrieve the original source exactly as committed by `add` — no reconstruction, no merge')
+  .argument('<id>', 'commit SHA (full or short prefix from `list`)')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--out-file <path>', 'write the raw source to this file instead of stdout')
+  .option('--json', 'output {id, raw} as JSON (for UI / programmatic use)')
+  .action(cmdGet);
 
 program
   .command('remove')

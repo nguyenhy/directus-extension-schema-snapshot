@@ -14,10 +14,20 @@
  *   implementation-specific — GitStore uses commit SHA/prefix).
  *   Must throw if id doesn't resolve to a version in this store.
  *
- * @property {function(import('../normalizers').EntityTree, string=): Promise<{id: string, message: string, previousTree: import('../normalizers').EntityTree}>} set
+ * @property {function(import('../normalizers').EntityTree, string=, object=): Promise<{id: string, message: string, previousTree: import('../normalizers').EntityTree}>} set
  *   Commits a new version. previousTree is what was stored immediately
  *   before this call ({} for the very first version) — handed back so
- *   callers can compute a diff without a second read.
+ *   callers can compute a diff without a second read. Optional third arg
+ *   `raw` is the original, pre-normalize source — stored verbatim so
+ *   getRaw() can return it later with no reconstruction step.
+ *
+ * @property {function(string): Promise<object>} getRaw
+ *   Returns the raw source exactly as passed to set()'s `raw` argument
+ *   for the given version id — no tree reconstruction, no denormalize,
+ *   no merge (contrast with get(), which reassembles the EntityTree).
+ *   Must throw a clean Error if no raw source was stored for this id
+ *   (e.g. versions committed before this capability existed, or
+ *   committed via set() with no `raw` argument).
  *
  * @property {function(string, string): Promise<{result: import('../diff').DiffResult, treeOld: import('../normalizers').EntityTree, treeNew: import('../normalizers').EntityTree, idOld: string, idNew: string}>} diffVersions
  *   Diffs two committed versions. MUST auto-sort by time so

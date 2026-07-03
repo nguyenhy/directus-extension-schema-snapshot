@@ -15,9 +15,10 @@ const { buildAddView } = require('../present/add');
  */
 async function addVersion({ inputPath, schemaType, message, store, parse }) {
   const { normalize } = getNormalizer(schemaType);
-  const tree = normalize(parse(inputPath));
+  const raw = parse(inputPath);
+  const tree = normalize(raw);
 
-  const { id, message: committedMessage, previousTree } = await store.set(tree, message);
+  const { id, message: committedMessage, previousTree } = await store.set(tree, message, raw);
 
   const result = diff(previousTree, tree);
   return buildAddView(id, committedMessage, result, previousTree, tree);

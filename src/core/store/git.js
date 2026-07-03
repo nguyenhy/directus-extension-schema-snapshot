@@ -4,6 +4,11 @@ const { spawn } = require('child_process');
 const simpleGit = require('simple-git');
 const { writeTreeToDir, readTreeFromDir } = require('../../utils/fsTree');
 
+// Fixed filename for the raw, pre-normalize source (see set()/getRaw()) —
+// lives at the repo root, alongside the per-entity "kind/name.json" files
+// writeTreeToDir() produces, so both are committed together in one tree.
+const RAW_SOURCE_FILE = '_source.json';
+
 /**
  * Reads multiple blobs from a repo in one `git cat-file --batch` process,
  * instead of one `git show` spawn per blob (see GitStore.get()).
@@ -146,7 +151,7 @@ class GitStore {
         const sha = line.slice(0, tabIdx).split(' ')[2];
         return { filePath, sha };
       })
-      .filter((e) => e.filePath.endsWith('.json'));
+      .filter((e) => e.filePath.endsWith('.json') && e.filePath !== RAW_SOURCE_FILE);
 
     const contents = await batchCatFile(this.dir, entries.map((e) => e.sha));
 
@@ -188,19 +193,49 @@ class GitStore {
    * the diff internally, nothing here needs to know or care).
    * @param {import('../normalizers').EntityTree} tree
    * @param {string} [message]
+   * @param {object} [raw] - the original, pre-normalize parsed source
+   *   (e.g. what `parse(inputPath)` returned before `normalize()` ran).
+   *   Stored verbatim as `_source.json` in the same commit, so getRaw()
+   *   can return it later with no reconstruction/denormalize step. Omit
+   *   to commit a version with no raw source retrievable via getRaw().
    * @returns {Promise<{id: string, message: string, previousTree: import('../normalizers').EntityTree}>}
    *   previousTree is what was in the working dir before this commit —
    *   {} for the first-ever commit — handed back so callers can print a
    *   diff summary without a second read.
    */
-  async set(tree, message) {
+  async set(tree, message, raw) {
     await this.init();
     const previousTree = readTreeFromDir(this.dir);
     clearWorkingTree(this.dir);
     writeTreeToDir(tree, this.dir);
+    if (raw !== undefined) {
+      fs.writeFileSync(path.join(this.dir, RAW_SOURCE_FILE), JSON.stringify(raw, null, 2));
+    }
     await this.git.add('.');
     const summary = await this.git.commit(message || '(no message)', { '--allow-empty': null });
     return { id: summary.commit, message: message || '(no message)', previousTree };
+  }
+
+  /**
+   * Returns the raw source exactly as passed to set()'s `raw` argument for
+   * this version — a direct `git show <id>:_source.json` read, no tree
+   * reconstruction, no denormalize, no merge (contrast with get(), which
+   * reassembles the normalized EntityTree from per-entity files).
+   * @param {string} id - commit SHA (full or unambiguous prefix)
+   * @returns {Promise<object>}
+   * @throws {Error} "No raw source stored for commit <id>" if this
+   *   version was committed without a `raw` argument (e.g. before this
+   *   capability existed).
+   */
+  async getRaw(id) {
+    await this.init();
+    let content;
+    try {
+      content = await this.git.show([`${id}:${RAW_SOURCE_FILE}`]);
+    } catch {
+      throw new Error(`No raw source stored for commit ${id}`);
+    }
+    return JSON.parse(content);
   }
 
   /**

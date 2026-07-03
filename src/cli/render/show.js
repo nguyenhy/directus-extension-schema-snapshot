@@ -2,14 +2,18 @@ function printGroups(label, groups) {
   if (groups.length === 0) return;
   console.log(`\n  [${label}]`);
   let first = true;
-  for (const { collection, fields } of groups) {
+  groups.forEach(({ collection, fields }, i) => {
     if (!first) console.log('');
     first = false;
-    console.log(`    ${collection}`);
-    for (const { field, detail } of fields) {
-      console.log(`      ${field}${detail}`);
-    }
-  }
+    console.log(`    ${i + 1}. ${collection}`);
+
+    const labels = fields.map((f, j) => `${j + 1}. ${f.field}`);
+    const width = Math.max(...labels.map((l) => l.length));
+    fields.forEach((f, j) => {
+      const detail = f.detail.trimStart();
+      console.log(`      ${labels[j].padEnd(width)}${detail ? `  ${detail}` : ''}`);
+    });
+  });
 }
 
 /**
@@ -24,9 +28,9 @@ function printShowView(view) {
 
   if (view.collections.length) {
     console.log('\n  [collection]');
-    for (const collection of view.collections) {
-      console.log(`    ${collection}`);
-    }
+    view.collections.forEach((collection, i) => {
+      console.log(`    ${i + 1}. ${collection}`);
+    });
   }
 
   printGroups('field', view.fieldGroups);

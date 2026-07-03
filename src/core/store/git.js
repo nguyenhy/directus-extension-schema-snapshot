@@ -1,7 +1,49 @@
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const simpleGit = require('simple-git');
 const { writeTreeToDir, readTreeFromDir } = require('../../utils/fsTree');
+
+/**
+ * Reads multiple blobs from a repo in one `git cat-file --batch` process,
+ * instead of one `git show` spawn per blob (see GitStore.get()).
+ * @param {string} dir - repo dir
+ * @param {string[]} shas - blob SHAs to read, in order
+ * @returns {Promise<string[]>} blob contents, same order as shas
+ */
+function batchCatFile(dir, shas) {
+  return new Promise((resolve, reject) => {
+    if (shas.length === 0) return resolve([]);
+    const child = spawn('git', ['cat-file', '--batch'], { cwd: dir });
+    let buf = Buffer.alloc(0);
+    const results = [];
+    child.stdout.on('data', (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      while (true) {
+        const headerEnd = buf.indexOf('\n');
+        if (headerEnd === -1) break;
+        const header = buf.slice(0, headerEnd).toString();
+        const parts = header.split(' ');
+        const size = parseInt(parts[parts.length - 1], 10);
+        if (isNaN(size)) break; // e.g. "<sha> missing" — shouldn't happen for tree-listed blobs
+        const contentStart = headerEnd + 1;
+        const contentEnd = contentStart + size;
+        if (buf.length < contentEnd + 1) break; // wait for full content + trailing \n
+        results.push(buf.slice(contentStart, contentEnd).toString('utf8'));
+        buf = buf.slice(contentEnd + 1);
+      }
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0 && results.length !== shas.length) {
+        return reject(new Error(`git cat-file --batch exited with code ${code}`));
+      }
+      resolve(results);
+    });
+    child.stdin.write(shas.join('\n') + '\n');
+    child.stdin.end();
+  });
+}
 
 /**
  * Removes everything in dir except .git, so a fresh writeTreeToDir() call
@@ -91,16 +133,29 @@ class GitStore {
    */
   async get(id) {
     await this.init();
-    const rawFiles = await this.git.raw(['ls-tree', '-r', '--name-only', id]);
-    const files = rawFiles.trim().split('\n').filter((f) => f.endsWith('.json'));
+    const rawEntries = await this.git.raw(['ls-tree', '-r', id]);
+    // "<mode> blob <sha>\t<path>" per line
+    const entries = rawEntries
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const tabIdx = line.indexOf('\t');
+        const filePath = line.slice(tabIdx + 1);
+        const sha = line.slice(0, tabIdx).split(' ')[2];
+        return { filePath, sha };
+      })
+      .filter((e) => e.filePath.endsWith('.json'));
+
+    const contents = await batchCatFile(this.dir, entries.map((e) => e.sha));
+
     const tree = {};
-    for (const filePath of files) {
-      const content = await this.git.show([`${id}:${filePath}`]);
+    entries.forEach(({ filePath }, i) => {
       const slashIdx = filePath.indexOf('/');
       const kind = filePath.slice(0, slashIdx);
       const name = filePath.slice(slashIdx + 1, -'.json'.length);
-      tree[`${kind}:${name}`] = JSON.parse(content);
-    }
+      tree[`${kind}:${name}`] = JSON.parse(contents[i]);
+    });
     return tree;
   }
 

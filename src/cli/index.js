@@ -10,6 +10,7 @@ const { cmdAdd } = require('./commands/add');
 const { cmdList } = require('./commands/list');
 const { cmdShow } = require('./commands/show');
 const { cmdRemove } = require('./commands/remove');
+const { cmdExtract } = require('./commands/extract');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -82,6 +83,22 @@ program
   .option('--file-format <format>', 'which Parser to use for preview diffs (see core/parsers/index.js)', config.defaultFileFormat)
   .option('--json', 'output the remove view as JSON (for UI / programmatic use)')
   .action(cmdRemove);
+
+program
+  .command('extract')
+  .description('extract a partial snapshot of only added or only removed entities between two schemas')
+  .argument('<old>', 'older schema: file path or commit SHA from `list`')
+  .argument('<new>', 'newer schema: file path or commit SHA from `list`')
+  .requiredOption('--mode <mode>', 'which side of the diff to extract: "added" or "removed"')
+  .option('--no-dry-run', 'write the extracted entities to disk (default: print tree to stdout, write nothing)')
+  .option('--out-dir <dir>', 'write one file per extracted entity to a fresh subdir of this directory', config.defaultOutDir)
+  .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)
+  .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--json', 'output the extract view as JSON (for UI / programmatic use)')
+  .action(cmdExtract);
 
 (async () => {
   try {

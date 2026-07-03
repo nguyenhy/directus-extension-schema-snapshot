@@ -9,6 +9,7 @@ const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
 const { cmdList } = require('./commands/list');
 const { cmdShow } = require('./commands/show');
+const { cmdRemove } = require('./commands/remove');
 const pkg = require('../../package.json');
 
 const program = new Command();
@@ -69,6 +70,18 @@ program
   .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--json', 'output full EntityTree as JSON (for UI / programmatic use)')
   .action(cmdShow);
+
+program
+  .command('remove')
+  .description('remove a version — safe, non-destructive (creates a revert commit, nothing is deleted)')
+  .option('--latest', 'remove the most recently committed version (the only supported mode today)')
+  .option('--yes', 'skip the confirmation prompt')
+  .option('--schema-type <type>', 'which normalizer to use for preview diffs (see core/normalizers/index.js)', config.defaultSchemaType)
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'which Parser to use for preview diffs (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--json', 'output the remove view as JSON (for UI / programmatic use)')
+  .action(cmdRemove);
 
 (async () => {
   try {

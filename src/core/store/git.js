@@ -202,6 +202,43 @@ class GitStore {
     const summary = await this.git.commit(message || '(no message)', { '--allow-empty': null });
     return { id: summary.commit, message: message || '(no message)', previousTree };
   }
+
+  /**
+   * Removes the most recently committed version via `git revert` — safe
+   * by construction: creates a new commit undoing the last one, nothing
+   * is deleted or rewritten. Every prior version stays reachable via
+   * get()/list() exactly as before, including the one just "removed"
+   * (its tree is still readable at its original commit id).
+   * @returns {Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>}
+   *   previousTree is the version being undone; tree is the resulting
+   *   (now-current) version after the revert.
+   * @throws {Error} "No versions to remove" if the store has no commits yet
+   */
+  async removeLatest() {
+    await this.init();
+    const versions = await this.list();
+    if (versions.length === 0) {
+      throw new Error('No versions to remove');
+    }
+    const revertedId = versions[0].id;
+    const previousTree = await this.get(revertedId);
+
+    // --no-commit instead of --no-edit: git's auto-generated revert message
+    // is `Revert "<original commit message>"`, which names nothing useful
+    // when the original message was blank (the common case here). Commit
+    // it ourselves with a message that names the actual hash removed plus
+    // what changed, so `list`/reflog-free history stays informative.
+    await this.git.raw(['revert', '--no-commit', 'HEAD']);
+    const tree = readTreeFromDir(this.dir);
+
+    const { diff } = require('../diff');
+    const { added, modified, removed } = diff(previousTree, tree);
+    const message = `Remove version ${revertedId.slice(0, 7)} (${added.length} added, ${modified.length} modified, ${removed.length} removed)`;
+
+    await this.git.add('.');
+    const summary = await this.git.commit(message, { '--allow-empty': null });
+    return { id: summary.commit, revertedId, previousTree, tree };
+  }
 }
 
 module.exports = { GitStore };

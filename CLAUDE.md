@@ -4,11 +4,11 @@ Agent-facing entry point. Read this first, then [docs/architecture.md](./docs/ar
 
 ## What this repo is
 
-CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
+CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, extracts partial snapshots (added/removed/modified), and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
 
 ## Before touching code
 
-1. Read [docs/architecture.md](./docs/architecture.md) "Flow" section — every command is `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view) → `cli/render` (print). Don't collapse these layers or put console.log/process.exit in `core/`.
+1. Read [docs/architecture.md](./docs/architecture.md) "Flow" section — every command is `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view) → `cli/render` (print). Don't collapse these layers or put console.log/process.exit in `core/` (e.g. `add`, `diff`, `extract`).
 2. Check `docs/roadmap-draft.md` before assuming something is missing or unscoped — it lists what's deliberately not built yet (rename detection, migrate-plan/apply, Web UI) vs. what's done.
 3. `EntityTree` keys are `"kind:name"` strings, parsed by string-split in multiple places (`fsTree.js`, `buildMeta()`) — not a shared parser. Changing the format in `core/directus/normalize.js`'s `entityKey()` silently breaks those call sites with no compile error. Grep for `.indexOf(':')` and `.split(':')` before changing it.
 
@@ -19,6 +19,10 @@ CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diff
 - **Errors are clean, not raw stacks.** Every user-facing failure (missing file, unknown type, bad id) throws a plain `Error` with a message meant to be printed as `Error: <message>` — caught centrally in `cli/index.js`. Don't `console.error(err)` a raw stack from inside `core/` or `cli/commands/`.
 - **Non-destructive by construction.** `GitStore.removeLatest()` is a `git revert`, never `reset --hard` or history rewrite — every prior version stays readable afterward. If you extend removal (e.g. `remove <id>`), preserve this invariant; it's load-bearing for the "safe schema versioning" pitch, not incidental.
 - **JSDoc over prose comments.** Every exported function in `core/` has a `@param`/`@returns` JSDoc block, often with a "GOTCHA:" or rationale paragraph explaining a non-obvious constraint (e.g. `diff.js`'s `deepEqual` relies on sorted keys, not structural equality). Read these before assuming behavior — they're accurate and current, unlike stale prose docs tend to become.
+- **Prefix conventions.** For `diff` and `extract` output:
+  - `+` for added entities.
+  - `-` for removed entities.
+  - `~` for modified entities.
 
 ## Verifying a change
 

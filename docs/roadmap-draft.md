@@ -4,7 +4,7 @@ Ordered, each stage builds on the last. `normalize`, `diff`, and storage (stage 
 
 1. ~~**Storage, backend-agnostic**~~ — done. `Store` interface (`core/store/store.js`: `list`/`get`/`set`/`diffVersions`/`removeLatest`), `GitStore` (`core/store/git.js`) is the only implementation, every version = one commit. Adds `add`, `list`, `show <id>`, `remove --latest`. No `export`/`import` yet — not needed since `show --json` + `add` already round-trip a version.
 2. **Rename detection** — `renamed_candidates` in diff output: heuristic match on type + position, always flagged for human confirmation before being treated as a rename (prevents silently turning a rename into a destructive remove+add).
-3. **Extract** — generate a partial snapshot containing only added or only removed fields, usable as isolated migration units.
+3. ~~**Extract** — generate a partial snapshot containing only added, removed, or modified fields, usable as isolated migration units.~~
 4. **Migrate plan** — turn a diff into an ordered list of operations (collections → fields → relations for adds; reverse for removes), safe against FK ordering.
 5. **Apply** — execute a migration plan against a live schema via SDK calls (Directus extension entrypoint). Add-phase and remove-phase run as separate, explicit steps so manual backfill can happen in between. Dry-run mode (print planned calls, no execution) built in from the start, not bolted on later.
 6. **Rollback plan generator** — reverse-diff from an applied migration.

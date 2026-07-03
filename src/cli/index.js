@@ -89,7 +89,7 @@ program
   .description('extract a partial snapshot of only added or only removed entities between two schemas')
   .argument('<old>', 'older schema: file path or commit SHA from `list`')
   .argument('<new>', 'newer schema: file path or commit SHA from `list`')
-  .requiredOption('--mode <mode>', 'which side of the diff to extract: "added" or "removed"')
+  .requiredOption('--mode <mode>', 'which part of the diff to extract: "added", "removed", or "modified"')
   .option('--no-dry-run', 'write the extracted entities to disk (default: print tree to stdout, write nothing)')
   .option('--out-dir <dir>', 'write one file per extracted entity to a fresh subdir of this directory', config.defaultOutDir)
   .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)

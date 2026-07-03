@@ -13,14 +13,14 @@ const { buildExtractView } = require('../present/extract');
  * — no files written. Pass dryRun: false to actually write it via
  * writeTreeToDir/runSubDir, the same on-disk layout `normalize` uses, so it
  * round-trips through `add`/`show --json` like any other tree.
- * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object}} params
+ * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object}} params
  *   `store` and `parse` are required, injected dependencies — see
  *   core/operations/add.js for the rationale.
- * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed', dir: string, tree: import('../normalizers').EntityTree} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree}>}
+ * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree}>}
  */
 async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, subdirFormat, dryRun = true, store, parse }) {
-  if (mode !== 'added' && mode !== 'removed') {
-    throw new Error(`Unknown extract mode "${mode}". Available: added, removed`);
+  if (mode !== 'added' && mode !== 'removed' && mode !== 'modified') {
+    throw new Error(`Unknown extract mode "${mode}". Available: added, removed, modified`);
   }
 
   const { normalize } = getNormalizer(schemaType);
@@ -43,8 +43,10 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
     result = diff(treeOld, treeNew);
   }
 
-  const keys = mode === 'added' ? result.added : result.removed;
-  const sourceTree = mode === 'added' ? treeNew : treeOld;
+  const keys = mode === 'added' ? result.added
+    : mode === 'removed' ? result.removed
+    : result.modified.map((m) => m.key);
+  const sourceTree = mode === 'removed' ? treeOld : treeNew;
   const tree = {};
   for (const key of keys) tree[key] = sourceTree[key];
 

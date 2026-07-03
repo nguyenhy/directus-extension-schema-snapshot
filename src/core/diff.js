@@ -42,6 +42,13 @@ function changedPaths(oldEntity, newEntity, prefix = '') {
 }
 
 /**
+ * @typedef {object} DiffResult
+ * @property {string[]} added
+ * @property {string[]} removed
+ * @property {{key: string, changes: {path: string, from: *, to: *}[]}[]} modified
+ */
+
+/**
  * Structural diff between two normalize()-output trees, keyed by entity key
  * (see normalize.js's entityKey()). No rename detection — an entity that
  * disappears from treeOld and a differently-keyed one that appears in
@@ -49,7 +56,7 @@ function changedPaths(oldEntity, newEntity, prefix = '') {
  * inferred as a rename.
  * @param {import('./normalizers').EntityTree} treeOld
  * @param {import('./normalizers').EntityTree} treeNew
- * @returns {{added: string[], removed: string[], modified: {key: string, changes: object[]}[]}}
+ * @returns {DiffResult}
  */
 function diff(treeOld, treeNew) {
   const oldKeys = new Set(Object.keys(treeOld));

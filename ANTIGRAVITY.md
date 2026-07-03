@@ -9,6 +9,7 @@ CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diff
 ## CodeGraph Navigation
 This repository is indexed by CodeGraph (a `.codegraph/` directory exists at the root). 
 - Always reach for CodeGraph tools (`codegraph explore "<symbol>"` or `codegraph node <symbol>`) BEFORE using grep, find, or reading random files. It is faster and retrieves exact verbatim symbols and callers.
+- If running as an MCP client where CodeGraph tools are deferred/unloaded by default (e.g. Claude Code), load their schemas first — e.g. `ToolSearch("select:codegraph_explore,codegraph_node,codegraph_callers,codegraph_search")` — before falling back to `Read`/`cat`. Skipping this step is why agents default to `cat` instead of CodeGraph.
 
 ## Before touching code
 1. **Flow Compliance**: Follow the 4-layer architecture strictly: `cli/commands` (parse argv) → `core/operations` (orchestrate) → `core/present` (build view-model) → `cli/render` (stdout format) (e.g. `add`, `diff`, `extract`). Keep pure logic in `core/` completely free of console formatting, `console.log`, or `process.exit`.

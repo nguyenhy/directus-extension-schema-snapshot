@@ -9,6 +9,7 @@ const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
 const { cmdList } = require('./commands/list');
 const { cmdShow } = require('./commands/show');
+const { cmdGet } = require('./commands/get');
 const { cmdRemove } = require('./commands/remove');
 const { cmdExtract } = require('./commands/extract');
 const pkg = require('../../package.json');
@@ -73,6 +74,16 @@ program
   .action(cmdShow);
 
 program
+  .command('get')
+  .description('retrieve the original source exactly as committed by `add` — no reconstruction, no merge')
+  .argument('<id>', 'commit SHA (full or short prefix from `list`)')
+  .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--out-file <path>', 'write the raw source to this file instead of stdout')
+  .option('--json', 'output {id, raw} as JSON (for UI / programmatic use)')
+  .action(cmdGet);
+
+program
   .command('remove')
   .description('remove a version — safe, non-destructive (creates a revert commit, nothing is deleted)')
   .option('--latest', 'remove the most recently committed version (the only supported mode today)')
@@ -97,6 +108,8 @@ program
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
   .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
+  .option('--snapshot', 'write a single Directus snapshot JSON file instead of individual files')
+  .option('--snapshot-file <path>', 'write a single Directus snapshot JSON file to the specified path')
   .option('--json', 'output the extract view as JSON (for UI / programmatic use)')
   .action(cmdExtract);
 

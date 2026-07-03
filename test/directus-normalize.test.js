@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { normalize, stripVolatile, entityKey } = require('../src/core/directus/normalize');
+const { normalize, stripVolatile, entityKey, denormalize } = require('../src/core/directus/normalize');
 
 test('entityKey: builds "kind:name" for each known kind', () => {
   assert.equal(entityKey('collections', { collection: 'orders' }), 'collection:orders');
@@ -56,3 +56,30 @@ test('normalize: GOTCHA — non-Directus JSON silently returns {} instead of thr
   assert.deepEqual(normalize({ foo: 'bar' }), {});
   assert.deepEqual(normalize({}), {});
 });
+
+test('denormalize: builds raw Directus schema format from EntityTree', () => {
+  const tree = {
+    'collection:orders': { collection: 'orders' },
+    'field:orders.status': { collection: 'orders', field: 'status' },
+    'relation:orders.customer': { collection: 'orders', field: 'customer' },
+  };
+  const raw = denormalize(tree);
+  assert.deepEqual(raw, {
+    data: {
+      collections: [{ collection: 'orders' }],
+      fields: [{ collection: 'orders', field: 'status' }],
+      relations: [{ collection: 'orders', field: 'customer' }],
+    },
+  });
+});
+
+test('denormalize: stably sorts outputs by EntityTree key', () => {
+  const tree = {
+    'field:orders.status': { collection: 'orders', field: 'status' },
+    'collection:orders': { collection: 'orders' },
+  };
+  const raw = denormalize(tree);
+  assert.deepEqual(raw.data.collections, [{ collection: 'orders' }]);
+  assert.deepEqual(raw.data.fields, [{ collection: 'orders', field: 'status' }]);
+});
+

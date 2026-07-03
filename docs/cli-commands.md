@@ -89,7 +89,7 @@ schema-snapshot remove --latest
 schema-snapshot remove --latest --yes
 ```
 
-## `schema-snapshot extract <old> <new> --mode <mode> [--no-dry-run] [--out-dir <dir>] [--subdir-format <format>] [--schema-type <type>] [--store-dir <dir>] [--store-type <type>] [--file-format <format>] [--json]`
+## `schema-snapshot extract <old> <new> --mode <mode> [--no-dry-run] [--out-dir <dir>] [--subdir-format <format>] [--schema-type <type>] [--store-dir <dir>] [--store-type <type>] [--file-format <format>] [--snapshot] [--snapshot-file <path>] [--json]`
 
 Extract a partial EntityTree snapshot of only `added`, `removed`, or `modified` entities between two schemas.
 
@@ -106,7 +106,18 @@ Supported argument combinations are: `file` + `file`, `hash` + `file`, and `hash
 - **`--store-dir <dir>`**: Where the version store (git repo) lives, default `.snapshot/repo` (env `SCHEMA_SNAPSHOT_STORE_DIR`).
 - **`--store-type <type>`**: Which Store implementation to use, default `git` (env `SCHEMA_SNAPSHOT_STORE_TYPE`).
 - **`--file-format <format>`**: Which Parser to use for file arguments, default `json` (env `SCHEMA_SNAPSHOT_FILE_FORMAT`).
-- **`--json`**: Output the view data as JSON (in dry-run, outputs `{ mode, keys, dir, tree }`; in write mode, outputs the presenter's view object).
+- **`--snapshot`**: Instead of writing one file per entity, reconstruct a **full** schema by overlaying the extracted delta onto `<old>` (`added`/`modified`: `old + delta`; `removed`: `old - delta`), and write it as a single `snapshot.json` + `meta.json` pair under the usual subfolder. Requires the normalizer to support `denormalize` (only `directus` today).
+- **`--snapshot-file <path>`**: Same reconstruction as `--snapshot`, but written to an exact file path instead of the generated subfolder — companion metadata goes to `<path minus .json>.meta.json` (or `<path>.meta.json` if `<path>` doesn't end in `.json`).
+- **`--json`**: Output the view data as JSON (in dry-run, outputs `{ mode, keys, dir, tree }`, plus `snapshot`/`meta`/`verification` when `--snapshot`/`--snapshot-file` is used; in write mode, outputs the presenter's view object, plus `verification` for snapshot writes).
+
+### Merge verification (`--snapshot`/`--snapshot-file` only)
+
+Every reconstructed snapshot is checked before being trusted: `core/operations/extract.js`'s `verifyMerge()` re-diffs `<old>` against the reconstructed tree and asserts the change set matches the extracted mode's key set exactly (see its GOTCHA doc comment for the single-mode assumption this relies on). This catches a bad merge, a stale `<old>` tree, or wrong mode handling *before* the file is trusted.
+
+- On success, prints `✓ merge verified` after the normal extract output.
+- On failure, prints `✗ merge verification failed: <details>` (details include any of `unexpectedAdded`, `unexpectedRemoved`, `unexpectedModified`, `missingKeys` that are non-empty).
+- **Dry-run**: a failed verification only prints the `✗` line — nothing was written yet, so the process still exits `0`.
+- **Real write (`--no-dry-run`)**: the file is written first (so it's on disk for inspection), then a failed verification throws, which the CLI's central error handler prints as `Error: merge verification failed: ...` and exits `1`. Scripts/CI calling `extract --snapshot --no-dry-run` should treat a non-zero exit as "snapshot may be wrong, don't trust it," not "nothing was written."
 
 ### Examples
 
@@ -164,6 +175,34 @@ $ schema-snapshot extract v1.json v2.json --mode modified --no-dry-run
 ~ field:orders.status
 
 1 modified -> .snapshot/normalized/20260703-114103_v1.json_v2
+```
+
+#### Reconstructed snapshot (`--snapshot --no-dry-run`) — added mode
+```
+$ schema-snapshot extract v1.json v2.json --mode added --snapshot --no-dry-run
++ field:orders.tracking_number
+
+1 added snapshot -> .snapshot/normalized/20260703-114103_v1.json_v2/snapshot.json
+✓ merge verified
+```
+
+#### `--json` output shape with a snapshot + verification
+```
+$ schema-snapshot extract v1.json v2.json --mode added --snapshot --no-dry-run --json
+{
+  "mode": "added",
+  "keys": ["field:orders.tracking_number"],
+  "count": 1,
+  "dir": ".snapshot/normalized/20260703-114103_v1.json_v2",
+  "file": ".snapshot/normalized/20260703-114103_v1.json_v2/snapshot.json",
+  "verification": {
+    "ok": true,
+    "unexpectedAdded": [],
+    "unexpectedRemoved": [],
+    "unexpectedModified": [],
+    "missingKeys": []
+  }
+}
 ```
 
 ## Global

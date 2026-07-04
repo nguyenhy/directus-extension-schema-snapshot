@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.3...v1.0.4) (2026-07-04)
+
+
+### Bug Fixes
+
+* remove comment from tsconfig to make it comaptible with parser ([39b58a5](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/39b58a5e68f0ee34ba5e4b8f44f130f345fbd69a))
+
 ## [1.0.3](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.2...v1.0.3) (2026-07-04)
 
 

@@ -25,6 +25,21 @@ Schema snapshots as one giant JSON blob are hard to diff, hard to review in a PR
 
 Pre-`1.0.0`: no public API stability guarantee — internal module paths (`core/operations/*`, `core/env.js`, etc.) may move without a major bump. `1.0.0` will freeze a curated export surface (`src/index.js`) and the `EntityTree`/diff-view JSON shapes as the stable contract; changes to those after that point follow semver. See [CHANGELOG.md](./CHANGELOG.md).
 
+## Public API
+
+Import from the package root only — `require('schema-snapshot')` (deep paths like `schema-snapshot/src/core/...` are blocked by `package.json`'s `exports` map). Exported surface:
+
+- `createEnv({ storeDir, storeType?, fileFormat? })` — composition root, returns `{ store, parse }`.
+- `normalizeSchema(raw, schemaType)`, `buildMeta(...)` — raw schema JSON → `EntityTree`.
+- `diffSchemas(oldTree, newTree)` — structured diff (added/removed/modified) between two `EntityTree`s.
+- `addVersion(...)`, `listVersionsView(...)`, `getVersionView(...)`, `getRawSourceView(...)`, `removeLatestVersion(...)`, `removeSnapshotEvent(...)` — version storage operations, same as the CLI commands of the same name.
+- `extractSchemas(...)`, `buildExtractMeta(...)`, `mergeIntoOld(...)`, `verifyMerge(...)` — partial-snapshot extraction.
+- `statusView(...)`, `syncSnapshots(...)`, `readSyncState(...)`, `writeSyncState(...)` — sync/status operations.
+- `entityKey(kind, item)` — builds an `EntityTree` key (`"kind:name"` format); use this instead of constructing/parsing that string format yourself, since the format is an internal convention subject to change before `1.0.0`.
+- `errors` — object of typed error classes (`SchemaSnapshotError` base + subclasses e.g. `UnknownSchemaTypeError`, `FileNotFoundError`) for `err instanceof errors.X` handling.
+
+`EntityTree` shape, `Store`/`Parser`/`Normalizer` interfaces: see JSDoc in `core/normalizers/index.js` and `core/parsers/index.js` — authoritative until `1.0.0` formally freezes them here.
+
 ## Install
 
 ```

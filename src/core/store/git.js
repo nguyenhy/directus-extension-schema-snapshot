@@ -1,7 +1,7 @@
-const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawnGitCatFileBatch } = require('../platform/proc');
 const { simpleGit } = require('simple-git');
+const platformFs = require('../platform/fs');
 const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
 const { SourceNotFoundError, NoVersionsError } = require('../errors');
 
@@ -20,7 +20,7 @@ const RAW_SOURCE_FILE = '_source.json';
 function batchCatFile(dir, shas) {
   return new Promise((resolve, reject) => {
     if (shas.length === 0) return resolve([]);
-    const child = spawn('git', ['cat-file', '--batch'], { cwd: dir });
+    const child = spawnGitCatFileBatch(dir);
     let buf = Buffer.alloc(0);
     const results = [];
     child.stdout.on('data', (chunk) => {
@@ -62,7 +62,7 @@ class GitStore {
   constructor(dir) {
     this.dir = dir;
     // simple-git requires the directory to exist at construction time.
-    fs.mkdirSync(dir, { recursive: true });
+    platformFs.mkdir(dir);
     this.git = simpleGit(dir);
   }
 
@@ -70,7 +70,7 @@ class GitStore {
   async init() {
     // checkIsRepo() returns true if inside ANY parent git repo — can't use it.
     // Check for own .git/ instead so we always init the store's own repo.
-    const hasOwnGit = fs.existsSync(path.join(this.dir, '.git'));
+    const hasOwnGit = platformFs.exists(path.join(this.dir, '.git'));
     if (!hasOwnGit) {
       await this.git.init();
     }
@@ -84,8 +84,8 @@ class GitStore {
    * @returns {Promise<void>}
    */
   async reset() {
-    fs.rmSync(this.dir, { recursive: true, force: true });
-    fs.mkdirSync(this.dir, { recursive: true });
+    platformFs.remove(this.dir);
+    platformFs.mkdir(this.dir);
     this.git = simpleGit(this.dir);
     await this.init();
   }
@@ -110,8 +110,8 @@ class GitStore {
    */
   async readMeta(key) {
     const p = this.metaPath(key);
-    if (!fs.existsSync(p)) return null;
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    if (!platformFs.exists(p)) return null;
+    return JSON.parse(platformFs.readFile(p));
   }
 
   /**
@@ -122,8 +122,8 @@ class GitStore {
    */
   async writeMeta(key, data) {
     const p = this.metaPath(key);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, JSON.stringify(data, null, 2));
+    platformFs.mkdir(path.dirname(p));
+    platformFs.writeFile(p, JSON.stringify(data, null, 2));
   }
 
   /**
@@ -245,7 +245,7 @@ class GitStore {
     const previousTree = readTreeFromDir(this.dir);
     writeTreeDelta(tree, previousTree, this.dir);
     if (raw !== undefined) {
-      fs.writeFileSync(path.join(this.dir, RAW_SOURCE_FILE), JSON.stringify(raw, null, 2));
+      platformFs.writeFile(path.join(this.dir, RAW_SOURCE_FILE), JSON.stringify(raw, null, 2));
     }
     await this.git.add('.');
     const summary = await this.git.commit(message || '(no message)', { '--allow-empty': null });

@@ -1,5 +1,5 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('../platform/fs');
 const { getNormalizer } = require('../normalizers');
 const { diff } = require('../diff');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
@@ -101,8 +101,8 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
     throw new SchemaSnapshotError(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
   }
 
-  const oldIsFile = fs.existsSync(oldSchema);
-  const newIsFile = fs.existsSync(newSchema);
+  const oldIsFile = fs.exists(oldSchema);
+  const newIsFile = fs.exists(newSchema);
 
   // Only 3 arg combos are supported: file+file, hash+file, hash+hash.
   // file+hash (old as file, new as version id) is not a supported combo.
@@ -152,15 +152,15 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
   if (snapshotFile) {
     const parentDir = path.dirname(snapshotFile);
     if (parentDir) {
-      fs.mkdirSync(parentDir, { recursive: true });
+      fs.mkdir(parentDir);
     }
     const snapshotData = denormalize(mergedTree);
-    fs.writeFileSync(snapshotFile, JSON.stringify(snapshotData, null, 2) + '\n');
+    fs.writeFile(snapshotFile, JSON.stringify(snapshotData, null, 2) + '\n');
 
     const metaFile = snapshotFile.endsWith('.json')
       ? snapshotFile.slice(0, -5) + '.meta.json'
       : snapshotFile + '.meta.json';
-    fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2) + '\n');
+    fs.writeFile(metaFile, JSON.stringify(meta, null, 2) + '\n');
 
     return {
       dryRun: false,
@@ -173,11 +173,11 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
   }
 
   if (snapshot) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdir(dir);
     const snapshotData = denormalize(mergedTree);
     const file = path.join(dir, 'snapshot.json');
-    fs.writeFileSync(file, JSON.stringify(snapshotData, null, 2) + '\n');
-    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
+    fs.writeFile(file, JSON.stringify(snapshotData, null, 2) + '\n');
+    fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
 
     return {
       dryRun: false,
@@ -189,9 +189,9 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
     };
   }
 
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdir(dir);
   writeTreeToDir(tree, dir);
-  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
+  fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
 
   return { dryRun: false, view: buildExtractView(keys, mode, dir), tree };
 }

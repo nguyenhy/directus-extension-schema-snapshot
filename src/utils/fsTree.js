@@ -1,5 +1,5 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('../core/platform/fs');
 const { timestamp } = require('./timestamp');
 const { InvalidSubdirFormatError } = require('../core/errors');
 
@@ -59,9 +59,9 @@ function writeTreeToDir(tree, dir) {
   for (const key of Object.keys(tree)) {
     const [kind, name] = key.split(':');
     const kindDir = path.join(dir, kind);
-    fs.mkdirSync(kindDir, { recursive: true });
+    fs.mkdir(kindDir);
     const file = path.join(kindDir, `${name}.json`);
-    fs.writeFileSync(file, JSON.stringify(tree[key], null, 2) + '\n');
+    fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
   }
 }
 
@@ -76,14 +76,14 @@ function writeTreeToDir(tree, dir) {
  */
 function readTreeFromDir(dir) {
   const tree = {};
-  if (!fs.existsSync(dir)) return tree;
-  for (const kind of fs.readdirSync(dir)) {
+  if (!fs.exists(dir)) return tree;
+  for (const kind of fs.readdir(dir)) {
     const kindDir = path.join(dir, kind);
-    if (!fs.statSync(kindDir).isDirectory()) continue;
-    for (const file of fs.readdirSync(kindDir)) {
+    if (!fs.isDirectory(kindDir)) continue;
+    for (const file of fs.readdir(kindDir)) {
       if (!file.endsWith('.json')) continue;
       const name = file.slice(0, -'.json'.length);
-      tree[`${kind}:${name}`] = JSON.parse(fs.readFileSync(path.join(kindDir, file), 'utf8'));
+      tree[`${kind}:${name}`] = JSON.parse(fs.readFile(path.join(kindDir, file)));
     }
   }
   return tree;
@@ -110,16 +110,16 @@ function writeTreeDelta(tree, previousTree, dir) {
     if (newKeys.has(key)) continue;
     const [kind, name] = key.split(':');
     const file = path.join(dir, kind, `${name}.json`);
-    if (fs.existsSync(file)) fs.rmSync(file);
+    if (fs.exists(file)) fs.remove(file, { force: true });
   }
 
   for (const key of newKeys) {
     if (JSON.stringify(previousTree[key]) === JSON.stringify(tree[key])) continue;
     const [kind, name] = key.split(':');
     const kindDir = path.join(dir, kind);
-    fs.mkdirSync(kindDir, { recursive: true });
+    fs.mkdir(kindDir);
     const file = path.join(kindDir, `${name}.json`);
-    fs.writeFileSync(file, JSON.stringify(tree[key], null, 2) + '\n');
+    fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
   }
 }
 

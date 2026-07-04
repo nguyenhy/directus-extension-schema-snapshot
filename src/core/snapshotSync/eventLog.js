@@ -1,5 +1,5 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('../platform/fs');
 const { EventNotFoundError, SourceNotFoundError } = require('../errors');
 
 // schema-snapshots/ layout (see docs/proposal-schema-snapshot-sync.md §2):
@@ -16,8 +16,8 @@ const SOURCE_DIR = 'source';
  */
 function readEventLog(dir) {
   const metaPath = path.join(dir, META_FILE);
-  if (!fs.existsSync(metaPath)) return { events: [] };
-  return JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+  if (!fs.exists(metaPath)) return { events: [] };
+  return JSON.parse(fs.readFile(metaPath));
 }
 
 /**
@@ -27,8 +27,8 @@ function readEventLog(dir) {
  * @param {{events: Array<object>}} log
  */
 function writeEventLog(dir, log) {
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, META_FILE), JSON.stringify(log, null, 2));
+  fs.mkdir(dir);
+  fs.writeFile(path.join(dir, META_FILE), JSON.stringify(log, null, 2));
 }
 
 function nextEventId(log) {
@@ -86,10 +86,10 @@ function activeAddEvents(log) {
  */
 function appendAddEvent(dir, log, { hash, raw, message }) {
   const sourceDir = path.join(dir, SOURCE_DIR);
-  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.mkdir(sourceDir);
   const sourcePath = path.join(sourceDir, `${hash}.json`);
-  if (!fs.existsSync(sourcePath)) {
-    fs.writeFileSync(sourcePath, JSON.stringify(raw, null, 2));
+  if (!fs.exists(sourcePath)) {
+    fs.writeFile(sourcePath, JSON.stringify(raw, null, 2));
   }
   const event = { id: nextEventId(log), type: 'add', hash, at: new Date().toISOString() };
   if (message) event.message = message;
@@ -149,8 +149,8 @@ function appendRemoveEventById(log, targetId) {
  */
 function readSource(dir, hash) {
   const sourcePath = path.join(dir, SOURCE_DIR, `${hash}.json`);
-  if (!fs.existsSync(sourcePath)) throw new SourceNotFoundError(`No source file for hash "${hash}"`);
-  return JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
+  if (!fs.exists(sourcePath)) throw new SourceNotFoundError(`No source file for hash "${hash}"`);
+  return JSON.parse(fs.readFile(sourcePath));
 }
 
 // Matches the commit message format for a synced event: "sync: e2 (94c6dc9)"

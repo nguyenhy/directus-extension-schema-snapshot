@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('../platform/fs');
 const { readEventLog, activeAddEvents, parseSyncMessage } = require('./eventLog');
 const { contentHash } = require('../hash');
 const { AmbiguousRefError, EventNotFoundError } = require('../errors');
@@ -112,7 +112,7 @@ async function resolveRef(ref, { snapshotsDir, store, versions }) {
  * @returns {Promise<string>} file path (unchanged) or resolved GitStore commit id
  */
 async function resolveArgOrFile(arg, { snapshotsDir, store, cacheRef, versions }) {
-  if (cacheRef || fs.existsSync(arg)) return arg;
+  if (cacheRef || fs.exists(arg)) return arg;
   return resolveRef(arg, { snapshotsDir, store, versions });
 }
 

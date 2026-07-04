@@ -1,5 +1,5 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('../platform/fs');
 const { getNormalizer } = require('../normalizers');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
 const { buildNormalizeView } = require('../present/normalize');
@@ -40,10 +40,10 @@ function normalizeSchema({ inputPath, schemaType, outDir, subdirFormat, dryRun, 
   }
 
   const dir = runSubDir(outDir, inputPath, subdirFormat);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.copyFileSync(inputPath, path.join(dir, `original${path.extname(inputPath)}`));
+  fs.mkdir(dir);
+  fs.copyFile(inputPath, path.join(dir, `original${path.extname(inputPath)}`));
   writeTreeToDir(tree, dir);
-  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(buildMeta(tree, inputPath), null, 2) + '\n');
+  fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(buildMeta(tree, inputPath), null, 2) + '\n');
 
   return { dryRun: false, view: buildNormalizeView(tree, dir) };
 }

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const simpleGit = require('simple-git');
-const { writeTreeToDir, readTreeFromDir } = require('../../utils/fsTree');
+const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
 
 // Fixed filename for the raw, pre-normalize source (see set()/getRaw()) —
 // lives at the repo root, alongside the per-entity "kind/name.json" files
@@ -48,20 +48,6 @@ function batchCatFile(dir, shas) {
     child.stdin.write(shas.join('\n') + '\n');
     child.stdin.end();
   });
-}
-
-/**
- * Removes everything in dir except .git, so a fresh writeTreeToDir() call
- * accurately reflects removed entities too (git then sees them as deleted
- * files, not just files git add -A happens to ignore).
- * @param {string} dir
- */
-function clearWorkingTree(dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir)) {
-    if (entry === '.git') continue;
-    fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-  }
 }
 
 /**
@@ -256,8 +242,7 @@ class GitStore {
   async set(tree, message, raw) {
     await this.init();
     const previousTree = readTreeFromDir(this.dir);
-    clearWorkingTree(this.dir);
-    writeTreeToDir(tree, this.dir);
+    writeTreeDelta(tree, previousTree, this.dir);
     if (raw !== undefined) {
       fs.writeFileSync(path.join(this.dir, RAW_SOURCE_FILE), JSON.stringify(raw, null, 2));
     }

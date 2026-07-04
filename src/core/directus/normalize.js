@@ -105,7 +105,8 @@ function normalize(rawSchema) {
     }
   }
 
-  for (const kind of Object.keys(ARRAY_KINDS)) {
+  const arrayKinds = /** @type {(keyof typeof ARRAY_KINDS)[]} */ (Object.keys(ARRAY_KINDS));
+  for (const kind of arrayKinds) {
     const items = Array.isArray(root[kind]) ? root[kind] : [];
     for (const item of items) {
       tree[entityKey(kind, item)] = stripVolatile(item);

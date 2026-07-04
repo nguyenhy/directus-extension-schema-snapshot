@@ -57,6 +57,7 @@ function runSubDir(outDir, inputPath, format) {
  * @returns {Object.<string, {collection?: string, field?: string}>}
  */
 function buildKeyMap(tree) {
+  /** @type {Object.<string, {collection?: string, field?: string}>} */
   const map = {};
   for (const key of Object.keys(tree)) {
     const value = tree[key];

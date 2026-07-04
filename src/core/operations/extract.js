@@ -88,7 +88,7 @@ function verifyMerge(treeOld, merged, result, mode) {
  * In dry-run mode (default), returns the partial tree plus the dir it
  * *would* be written to — no files written. Pass dryRun: false to actually write it.
  * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object, snapshot?: boolean, snapshotFile?: string}} params
- * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean}>}
+ * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean, verification?: object} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean, verification?: object}>}
  */
 async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, subdirFormat, dryRun = true, store, parse, snapshot, snapshotFile }) {
   if (mode !== 'added' && mode !== 'removed' && mode !== 'modified') {

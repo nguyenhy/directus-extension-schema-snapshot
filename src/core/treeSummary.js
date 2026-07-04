@@ -11,6 +11,7 @@
  */
 function buildTreeSummary(tree) {
   const counts = { collections: 0, fields: 0, relations: 0 };
+  /** @type {Object.<string, {fields: string[], relations: string[]}>} */
   const collections = {};
 
   for (const key of Object.keys(tree)) {

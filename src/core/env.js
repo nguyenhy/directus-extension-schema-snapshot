@@ -34,7 +34,7 @@ function createStore(storeType, storeDir) {
     case 'git':
       return new GitStore(storeDir);
     default:
-      throw new UnknownStoreTypeError(`Unknown store type "${storeType}". Available: git`);
+      throw new UnknownStoreTypeError(`Unknown store type "${storeType}" (from --store-type or SCHEMA_SNAPSHOT_STORE_TYPE). Available: git`);
   }
 }
 

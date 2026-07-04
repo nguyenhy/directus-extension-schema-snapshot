@@ -6,7 +6,21 @@
   "bin": {
     "schema-snapshot": "./src/cli/index.js"
   },
-  "main": "./src/core/normalize.js",
+  "main": "./src/index.js",
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenhy/directus-extension-schema-snapshot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nguyenhy/directus-extension-schema-snapshot/issues"
+  },
+  "homepage": "https://github.com/nguyenhy/directus-extension-schema-snapshot#readme",
   "scripts": {
     "test": "node --test test/**/*.test.js"
   },

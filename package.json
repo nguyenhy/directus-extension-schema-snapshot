@@ -11,8 +11,10 @@
     ".": "./src/index.js"
   },
   "files": [
-    "src"
+    "src",
+    "types"
   ],
+  "types": "./types/index.d.ts",
   "engines": {
     "node": ">=18"
   },
@@ -25,12 +27,18 @@
   },
   "homepage": "https://github.com/nguyenhy/directus-extension-schema-snapshot#readme",
   "scripts": {
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/**/*.test.js",
+    "types:build": "tsc",
+    "types:test": "tsc --noEmit -p tsconfig.test-types.json"
   },
   "license": "MIT",
   "dependencies": {
     "commander": "15.0.0",
     "dotenv": "17.4.2",
     "simple-git": "3.36.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
   }
 }

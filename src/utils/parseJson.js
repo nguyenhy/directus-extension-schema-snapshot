@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { FileNotFoundError, InvalidJSONError } = require('../core/errors');
 
 /**
  * Reads and JSON.parses a file, with clean errors for the common failure
@@ -14,13 +15,13 @@ const fs = require('fs');
  */
 function parseJSONFile(filePath) {
   if (!fs.existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
+    throw new FileNotFoundError(`File not found: ${filePath}`);
   }
   const raw = fs.readFileSync(filePath, 'utf8');
   try {
     return JSON.parse(raw);
   } catch (err) {
-    throw new Error(`Invalid JSON in ${filePath}: ${err.message}`);
+    throw new InvalidJSONError(`Invalid JSON in ${filePath}: ${err.message}`);
   }
 }
 

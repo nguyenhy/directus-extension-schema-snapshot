@@ -1,6 +1,7 @@
 const { getNormalizer } = require('../normalizers');
 const { readEventLog, readSource, formatSyncMessage, formatRemoveMessage } = require('../snapshotSync/eventLog');
 const { contentHash } = require('../hash');
+const { SyncStateError } = require('../errors');
 
 const SYNC_STATE_KEY = 'sync-state';
 
@@ -64,7 +65,7 @@ async function syncSnapshots({ snapshotsDir, schemaType, store }) {
       syncedCount++;
     } else if (event.type === 'remove') {
       if (event.removes !== expectedTarget) {
-        throw new Error(
+        throw new SyncStateError(
           `Cannot sync: remove event "${event.id}" targets "${event.removes}", but live execution at this point would have targeted "${expectedTarget}" — ` +
             'replaying an arbitrary-position removal requires reverting a specific historical commit, which GitStore.removeLatest() ' +
             'cannot do (it only reverts HEAD). See sync.js\'s KNOWN LIMITATION doc comment.'

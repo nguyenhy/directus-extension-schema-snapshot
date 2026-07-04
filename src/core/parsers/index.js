@@ -1,4 +1,5 @@
 const { parseJSONFile } = require('../../utils/parseJson');
+const { UnknownFileFormatError } = require('../errors');
 
 /**
  * @typedef {object} Parser
@@ -25,7 +26,7 @@ const parsers = {
 function getParser(format) {
   const parser = parsers[format];
   if (!parser) {
-    throw new Error(`Unknown file format "${format}". Available: ${Object.keys(parsers).join(', ')}`);
+    throw new UnknownFileFormatError(`Unknown file format "${format}". Available: ${Object.keys(parsers).join(', ')}`);
   }
   return parser;
 }

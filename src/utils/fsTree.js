@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { timestamp } = require('./timestamp');
+const { InvalidSubdirFormatError } = require('../core/errors');
 
 /** Placeholders recognized in a subdir format template, see runSubDir(). */
 const SUBDIR_PLACEHOLDERS = { name: 'basename of the input file (no extension)', time: 'YYYYMMDD-HHmmss' };
@@ -28,18 +29,18 @@ function runSubDir(outDir, inputPath, format) {
 
   const usedPlaceholders = [...format.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
   if (usedPlaceholders.length === 0) {
-    throw new Error(`Invalid subdir format "${format}": must use at least one of {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": must use at least one of {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
   }
   for (const key of usedPlaceholders) {
     if (!(key in values)) {
-      throw new Error(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+      throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
     }
   }
 
   const rendered = format.replace(/\{(\w+)\}/g, (_, key) => values[key]);
   const segments = rendered.split('/');
   if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) {
-    throw new Error(`Invalid subdir format "${format}": rendered to "${rendered}", which is not a safe path (empty, ".", or ".." segment)`);
+    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": rendered to "${rendered}", which is not a safe path (empty, ".", or ".." segment)`);
   }
 
   return path.join(outDir, rendered);

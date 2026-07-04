@@ -1,3 +1,5 @@
+const { UnknownEntityKindError } = require('../errors');
+
 /**
  * Directus system fields stripped from every entity, at every nesting level.
  * NOTE: this strip is recursive (see stripVolatile) — a field legitimately
@@ -45,7 +47,7 @@ function entityKey(kind, item) {
   if (kind === 'collections') return `collection:${item.collection}`;
   if (kind === 'fields') return `field:${item.collection}.${item.field}`;
   if (kind === 'relations') return `relation:${item.collection}.${item.field}`;
-  throw new Error(`Unknown entity kind "${kind}"`);
+  throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
 }
 
 /**

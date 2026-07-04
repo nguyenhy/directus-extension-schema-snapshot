@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { EventNotFoundError, SourceNotFoundError } = require('../errors');
 
 // schema-snapshots/ layout (see docs/proposal-schema-snapshot-sync.md §2):
 //   meta.json          <- this module's event log
@@ -111,10 +112,10 @@ function appendRemoveEvent(log, { hash, eventId }) {
   let resolved;
   if (eventId) {
     resolved = active.find((e) => e.id === eventId);
-    if (!resolved) throw new Error(`No active add event with id "${eventId}"`);
+    if (!resolved) throw new EventNotFoundError(`No active add event with id "${eventId}"`);
   } else {
     const matches = active.filter((e) => e.hash === hash);
-    if (matches.length === 0) throw new Error(`No active add event for hash "${hash}"`);
+    if (matches.length === 0) throw new EventNotFoundError(`No active add event for hash "${hash}"`);
     resolved = matches[matches.length - 1];
   }
   const event = { id: nextEventId(log), type: 'remove', removes: resolved.id, at: new Date().toISOString() };
@@ -148,7 +149,7 @@ function appendRemoveEventById(log, targetId) {
  */
 function readSource(dir, hash) {
   const sourcePath = path.join(dir, SOURCE_DIR, `${hash}.json`);
-  if (!fs.existsSync(sourcePath)) throw new Error(`No source file for hash "${hash}"`);
+  if (!fs.existsSync(sourcePath)) throw new SourceNotFoundError(`No source file for hash "${hash}"`);
   return JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
 }
 

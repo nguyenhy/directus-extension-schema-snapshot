@@ -1,6 +1,36 @@
 // Loads .env (if present) into process.env. The only file in the codebase
 // that reads process.env directly — everything else takes config as input.
-require('dotenv').config({ quiet: true });
+//
+// GOTCHA: dotenv resolves its default path against process.cwd(), not this
+// file's location or the invoked script's directory. If this package is
+// invoked via a wrapper that changes cwd (e.g. `npm run` sets cwd to the
+// nearest package.json dir), the "obvious" .env sitting next to this
+// package can be silently skipped in favor of one higher up the tree — no
+// error, just wrong values loaded. resolveEnvFile() lets that be pinned
+// explicitly instead of relying on cwd.
+//
+// This runs before commander parses argv (config.js is required at module
+// load, and cli/index.js bakes config.defaultX into option defaults at that
+// same time) — so --env-file can't go through commander normally and is
+// pre-scanned from process.argv here instead.
+/**
+ * Resolves which .env file to load, checked in order:
+ * 1. `--env-file <path>` / `--env-file=<path>` CLI arg
+ * 2. SCHEMA_SNAPSHOT_ENV_FILE environment variable
+ * 3. undefined — dotenv falls back to its own default (cwd/.env)
+ * @returns {string | undefined}
+ */
+function resolveEnvFile() {
+  const idx = process.argv.findIndex((arg) => arg === '--env-file' || arg.startsWith('--env-file='));
+  if (idx !== -1) {
+    const arg = process.argv[idx];
+    if (arg.includes('=')) return arg.slice(arg.indexOf('=') + 1);
+    return process.argv[idx + 1];
+  }
+  return process.env.SCHEMA_SNAPSHOT_ENV_FILE || undefined;
+}
+
+require('dotenv').config({ quiet: true, path: resolveEnvFile() });
 
 /**
  * @typedef {object} Config

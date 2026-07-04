@@ -1,3 +1,11 @@
+## [1.0.2](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.1...v1.0.2) (2026-07-04)
+
+
+### Bug Fixes
+
+* add id-token permission for npm trusted publishing ([dafbd87](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/dafbd87feac8d6ead3801cd7bd1149b877ffe4b6))
+* scope release job to github environment for npm oidc trust ([4aab61a](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/4aab61a534d633516205b51d67fb4fbef26798dc))
+
 ## [1.0.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.0...v1.0.1) (2026-07-04)
 
 

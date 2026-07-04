@@ -1,6 +1,6 @@
 {
   "name": "schema-snapshot",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Directus schema snapshot normalize + diff toolset",
   "type": "commonjs",
   "bin": {

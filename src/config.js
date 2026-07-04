@@ -33,6 +33,18 @@ function resolveEnvFile() {
 require('dotenv').config({ quiet: true, path: resolveEnvFile() });
 
 /**
+ * Reads an env var, falling back only when truly unset — unlike `||`, an
+ * explicitly empty string (`SCHEMA_SNAPSHOT_X=`) is respected as-is instead
+ * of silently reverting to the hardcode default.
+ * @param {string} name
+ * @param {string} fallback
+ * @returns {string}
+ */
+function envOr(name, fallback) {
+  return process.env[name] !== undefined ? process.env[name] : fallback;
+}
+
+/**
  * @typedef {object} Config
  * @property {string} defaultOutDir - default --out-dir for `normalize`,
  *   overridable via SCHEMA_SNAPSHOT_OUT_DIR (see .env.example)
@@ -65,13 +77,13 @@ require('dotenv').config({ quiet: true, path: resolveEnvFile() });
 
 /** @type {Config} */
 const config = {
-  defaultOutDir: process.env.SCHEMA_SNAPSHOT_OUT_DIR || '.snapshot/normalized',
-  defaultSchemaType: process.env.SCHEMA_SNAPSHOT_TYPE || 'directus',
-  defaultSubdirFormat: process.env.SCHEMA_SNAPSHOT_SUBDIR_FORMAT || '{time}_{name}',
-  defaultStoreDir: process.env.SCHEMA_SNAPSHOT_STORE_DIR || '.snapshot/repo',
-  defaultStoreType: process.env.SCHEMA_SNAPSHOT_STORE_TYPE || 'git',
-  defaultFileFormat: process.env.SCHEMA_SNAPSHOT_FILE_FORMAT || 'json',
-  defaultSnapshotsDir: process.env.SCHEMA_SNAPSHOT_SNAPSHOTS_DIR || 'schema-snapshots',
+  defaultOutDir: envOr('SCHEMA_SNAPSHOT_OUT_DIR', '.snapshot/normalized'),
+  defaultSchemaType: envOr('SCHEMA_SNAPSHOT_TYPE', 'directus'),
+  defaultSubdirFormat: envOr('SCHEMA_SNAPSHOT_SUBDIR_FORMAT', '{time}_{name}'),
+  defaultStoreDir: envOr('SCHEMA_SNAPSHOT_STORE_DIR', '.snapshot/repo'),
+  defaultStoreType: envOr('SCHEMA_SNAPSHOT_STORE_TYPE', 'git'),
+  defaultFileFormat: envOr('SCHEMA_SNAPSHOT_FILE_FORMAT', 'json'),
+  defaultSnapshotsDir: envOr('SCHEMA_SNAPSHOT_SNAPSHOTS_DIR', 'schema-snapshots'),
 };
 
 module.exports = config;

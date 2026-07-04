@@ -1,4 +1,5 @@
 const { UnknownEntityKindError } = require('../errors');
+const { contentHash } = require('../hash');
 
 /**
  * Directus system fields stripped from every entity, at every nesting level.
@@ -10,7 +11,6 @@ const VOLATILE_KEYS = new Set(['id', 'date_created', 'date_updated', 'user_creat
 
 /**
  * Array-valued top-level schema sections -> singular key label.
- * Order here is also the order denormalize() emits them back in.
  */
 const ARRAY_KINDS = {
   collections: 'collection',
@@ -46,22 +46,41 @@ function stripVolatile(value) {
 }
 
 /**
- * Builds the flat-map key for one array-section entity: "kind:index".
- * Deliberately index-based, not name-based — entity content (e.g.
- * item.collection) is attacker-controlled input and must never end up as
- * a filesystem path segment (see fsTree.js, which uses this key's "name"
- * half as a filename). Index is ours to assign, never derived from input.
+ * Builds the identity descriptor a key's hash is derived from: what the
+ * entity actually IS (collection, or collection+field), not its full
+ * content. Keeping this independent of e.g. `type`/`meta` is what lets the
+ * same field be recognized as "modified" (same key, different content)
+ * across versions instead of showing up as a remove+add.
+ * @param {'collections'|'fields'|'systemfields'|'relations'} kind
+ * @param {object} item
+ * @returns {object}
+ */
+function entityIdentity(kind, item) {
+  return kind === 'collections' ? { collection: item.collection } : { collection: item.collection, field: item.field };
+}
+
+/**
+ * Builds the flat-map key for one array-section entity: "kind:hash".
+ * `hash` is a content hash of the entity's identity fields (collection,
+ * or collection+field) — NEVER the raw field content used directly as a
+ * filename. This is deliberate: item.collection/item.field are
+ * attacker-controlled input, and this key's "hash" half ends up as a
+ * filesystem path segment (see fsTree.js). Hashing keeps the same
+ * collection/field pair mapping to the same key across versions (so
+ * add/remove/modified detection in diff.js still works by identity), while
+ * guaranteeing the key is always a safe fixed-charset string regardless of
+ * what the source content contains.
  * @param {'collections'|'fields'|'systemfields'|'relations'} kind - plural schema section name
- * @param {number} index - position of the item within its section array
- * @returns {string} e.g. "collection:0", "field:12"
+ * @param {object} item - raw item from that section
+ * @returns {string} e.g. "collection:3f2b9c...", "field:9a01de..."
  * @throws {Error} if kind is not one of the known array section names
  */
-function entityKey(kind, index) {
+function entityKey(kind, item) {
   const label = ARRAY_KINDS[kind];
   if (!label) {
     throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
   }
-  return `${label}:${index}`;
+  return `${label}:${contentHash(entityIdentity(kind, item))}`;
 }
 
 /**
@@ -70,8 +89,9 @@ function entityKey(kind, index) {
  * systemfields, relations } } or the bare (un-{data}-wrapped) shape.
  *
  * Scalar fields (version, directus, vendor) each become their own
- * "meta:<name>" entry. Array sections become "<kind>:<index>" entries, one
- * per item, keyed by position — never by item content.
+ * "meta:<name>" entry. Array sections become "<kind>:<hash>" entries, one
+ * per item — see entityKey() for why the key is a hash of identity, not
+ * the raw name.
  * @param {object} rawSchema - raw parsed JSON, Directus schema export shape
  * @returns {import('../normalizers').EntityTree}
  */
@@ -87,9 +107,9 @@ function normalize(rawSchema) {
 
   for (const kind of Object.keys(ARRAY_KINDS)) {
     const items = Array.isArray(root[kind]) ? root[kind] : [];
-    items.forEach((item, index) => {
-      tree[entityKey(kind, index)] = stripVolatile(item);
-    });
+    for (const item of items) {
+      tree[entityKey(kind, item)] = stripVolatile(item);
+    }
   }
 
   return tree;
@@ -97,8 +117,9 @@ function normalize(rawSchema) {
 
 /**
  * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
- * Groups array-section entities by kind, sorted numerically by their
- * original index (NOT string-sorted — "10" must stay after "2"). Rebuilds
+ * Groups array-section entities by kind, sorted stably by key (hashes have
+ * no meaningful order, so this is deterministic output, not original-array-
+ * order-preserving — same guarantee the old name-based keys gave). Rebuilds
  * scalar fields (version/directus/vendor) from their "meta:*" entries.
  * @param {import('../normalizers').EntityTree} tree
  * @returns {object} Directus schema shape
@@ -107,28 +128,25 @@ function denormalize(tree) {
   const grouped = { collection: [], field: [], systemfield: [], relation: [] };
   const scalars = {};
 
-  for (const key of Object.keys(tree)) {
+  const keys = Object.keys(tree).sort();
+  for (const key of keys) {
     const sepIdx = key.indexOf(':');
     const kind = key.slice(0, sepIdx);
     const rest = key.slice(sepIdx + 1);
     if (kind === 'meta') {
       scalars[rest] = tree[key];
     } else if (grouped[kind]) {
-      grouped[kind].push([Number(rest), tree[key]]);
+      grouped[kind].push(tree[key]);
     }
-  }
-
-  for (const kind of Object.keys(grouped)) {
-    grouped[kind].sort((a, b) => a[0] - b[0]);
   }
 
   return {
     data: {
       ...scalars,
-      collections: grouped.collection.map(([, value]) => value),
-      fields: grouped.field.map(([, value]) => value),
-      systemfields: grouped.systemfield.map(([, value]) => value),
-      relations: grouped.relation.map(([, value]) => value),
+      collections: grouped.collection,
+      fields: grouped.field,
+      systemfields: grouped.systemfield,
+      relations: grouped.relation,
     },
   };
 }

@@ -49,9 +49,10 @@ function runSubDir(outDir, inputPath, format) {
 /**
  * Builds the "map.json" sidecar: entity key -> its identifying fields
  * (collection/field), pulled from the entity's own value. Keys are
- * index-based ("field:12") since core/directus/normalize.js's entityKey()
- * change, so this file is what makes a written tree human-navigable
- * without needing to open every entity file to find "which one is orders.status".
+ * content-hash-based ("field:9a01de...") since core/directus/normalize.js's
+ * entityKey() change, so this file is what makes a written tree
+ * human-navigable without needing to open every entity file to find
+ * "which one is orders.status".
  * @param {import('../core/normalizers').EntityTree} tree
  * @returns {Object.<string, {collection?: string, field?: string}>}
  */
@@ -72,11 +73,11 @@ function buildKeyMap(tree) {
 /**
  * Writes a normalize()-output tree to disk as one file per entity, plus a
  * map.json sidecar (see buildKeyMap()).
- * GOTCHA: relies on entityKey()'s "kind:index" format (see core/directus/normalize.js)
+ * GOTCHA: relies on entityKey()'s "kind:hash" format (see core/directus/normalize.js)
  * — splits each key on ":" to derive the subdirectory ("kind") and filename
- * ("index"). The index half is always a plain integer assigned by
- * normalize() itself, never attacker-controlled content, so this is safe
- * to use directly as a path segment.
+ * ("hash"). The hash half is a content hash of the entity's identity,
+ * never the raw attacker-controlled field content, so it's always a safe
+ * fixed-charset string to use directly as a path segment.
  * @param {import('../core/normalizers').EntityTree} tree - normalize() output
  * @param {string} dir - target directory (created if missing)
  */

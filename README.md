@@ -1,5 +1,7 @@
 # schema-snapshot
 
+> **Pre-1.0, unstable.** Breaking changes may land at any time without notice. Pin an exact version if you depend on this.
+
 ## What it is
 
 A small toolset that turns a raw JSON schema snapshot (e.g. Directus schema export) into a git-diffable, AI-readable format, then computes structured diffs between two versions (added / removed / modified).
@@ -17,9 +19,9 @@ Schema snapshots as one giant JSON blob are hard to diff, hard to review in a PR
 
 ## Status
 
-**Implemented:** `normalize`, `diff`, `add`, `list`, `show`, `remove` — git-backed version storage (every version = one commit), CLI only.
+**Implemented:** `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `extract`, `sync`, `status` — git-backed version storage (every version = one commit), host-repo-syncable event log (`schema-snapshots/`), CLI only.
 
-**Not yet built:** rename detection, extract, migrate-plan/apply, rollback plan, SQLite index, Web UI. See [Roadmap](./docs/roadmap-draft.md) for the ordered list — do not assume any of that exists in the code today.
+**Not yet built:** rename detection, migrate-plan/apply, rollback plan, SQLite index, Web UI. See [Roadmap](./docs/roadmap-draft.md) for the ordered list — do not assume any of that exists in the code today.
 
 ## Versioning
 

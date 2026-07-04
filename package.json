@@ -29,7 +29,8 @@
   "scripts": {
     "test": "node --test test/**/*.test.js",
     "types:build": "tsc",
-    "types:test": "tsc --noEmit -p tsconfig.test-types.json"
+    "types:test": "tsc --noEmit -p tsconfig.test-types.json",
+    "prepack": "npm run types:build"
   },
   "license": "MIT",
   "dependencies": {

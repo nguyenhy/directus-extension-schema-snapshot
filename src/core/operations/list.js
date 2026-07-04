@@ -15,6 +15,7 @@ const { readEventLog } = require('../snapshotSync/eventLog');
 async function listVersionsView({ store, snapshotsDir }) {
   const versions = await store.list();
   const log = readEventLog(snapshotsDir);
+  /** @type {Object.<string, string>} */
   const eventAtById = {};
   for (const event of log.events) eventAtById[event.id] = event.at;
   return buildListView(versions, eventAtById);

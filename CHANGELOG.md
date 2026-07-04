@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.2...v1.0.3) (2026-07-04)
+
+
+### Bug Fixes
+
+* add `revert`, `refactor` to the commit-analyzer ([53d5058](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/53d5058f111b62bea55f00dd9bb9e144710dde3a))
+
 ## [1.0.2](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.1...v1.0.2) (2026-07-04)
 
 

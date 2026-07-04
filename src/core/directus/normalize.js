@@ -33,7 +33,7 @@ function stripVolatile(value) {
  * Builds the flat-map key for one entity: "kind:name".
  * This "kind:name" string is a de facto wire format — downstream code
  * parses it back apart via string-split (fsTree.js splits on ":", then
- * cli/commands/normalize.js's buildMeta() further splits the name on "."
+ * core/operations/normalize.js's buildMeta() further splits the name on "."
  * for field/relation entries). Changing this format breaks both without
  * any compile-time warning.
  * @param {'collections'|'fields'|'relations'} kind - plural Directus schema section name

@@ -30,9 +30,12 @@
  *   committed via set() with no `raw` argument).
  *
  * @property {function(string, string): Promise<{result: import('../diff').DiffResult, treeOld: import('../normalizers').EntityTree, treeNew: import('../normalizers').EntityTree, idOld: string, idNew: string}>} diffVersions
- *   Diffs two committed versions. MUST auto-sort by time so
- *   diffVersions(a, b) === diffVersions(b, a) — always old→new in the
- *   result, regardless of argument order (GitStore sorts by commit time).
+ *   Diffs two committed versions. MUST auto-sort by a monotonic version-order
+ *   signal so diffVersions(a, b) === diffVersions(b, a) — always old→new in
+ *   the result, regardless of argument order. GitStore sorts by commit-graph
+ *   depth (`rev-list --count`), NOT commit timestamp — see git.js's
+ *   commitDepth() doc comment for why wall-clock time is unreliable here
+ *   (1-second resolution breaks symmetry for same-second commits).
  *
  * @property {function(string=): Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>} removeLatest
  *   Removes the most recent version. MUST be non-destructive — every

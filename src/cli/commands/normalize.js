@@ -1,5 +1,5 @@
 const { getParser } = require('../../core/parsers');
-const { normalizeSchema, buildMeta } = require('../../core/operations/normalize');
+const { normalizeSchema } = require('../../core/operations/normalize');
 const { printNormalizeView } = require('../render/normalize');
 
 /**
@@ -29,4 +29,4 @@ function cmdNormalize(inputPath, options) {
   printNormalizeView(result.view);
 }
 
-module.exports = { cmdNormalize, buildMeta };
+module.exports = { cmdNormalize };

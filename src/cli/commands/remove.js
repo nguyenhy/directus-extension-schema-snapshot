@@ -73,6 +73,10 @@ async function confirm(message, previewParams) {
  * @param {{latest?: boolean, hash?: string, id?: string, yes?: boolean, schemaType: string, storeDir: string, storeType: string, fileFormat: string, snapshotsDir: string, json?: boolean}} options
  */
 async function cmdRemove(options) {
+  if (options.latest && (options.hash || options.id)) {
+    throw new Error('--latest is mutually exclusive with --hash/--id');
+  }
+
   if (options.hash || options.id) {
     const event = removeSnapshotEvent({ snapshotsDir: options.snapshotsDir, hash: options.hash, eventId: options.id });
     if (options.json) {

@@ -10,6 +10,10 @@ const { printExtractView, printVerification } = require('../render/extract');
  * backend too — same file-vs-version auto-detection as `diff`), then
  * chooses whether to print or JSON-dump the view.
  *
+ * Unlike `diff`, mixing is restricted: `<old>` as a file with `<new>` as an
+ * event id/hash is rejected (extractSchemas throws) — only file+file,
+ * id/hash+file, and id/hash+id/hash are supported. See docs/cli-commands.md.
+ *
  * Non-file args are event ids or content hashes by default, resolved
  * through schema-snapshots/meta.json (see core/snapshotSync/resolve.js,
  * same treatment as `diff`). Pass `--cache-ref` to treat non-file args as

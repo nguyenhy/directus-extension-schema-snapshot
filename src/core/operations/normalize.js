@@ -3,45 +3,21 @@ const path = require('path');
 const { getNormalizer } = require('../normalizers');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
 const { buildNormalizeView } = require('../present/normalize');
+const { buildTreeSummary } = require('../treeSummary');
 const pkg = require('../../../package.json');
 
 /**
  * Builds the meta.json summary for one normalize run.
- * GOTCHA: parses tree keys assuming core/directus/normalize.js's entityKey() format
- * "kind:collection.name" — silently mis-groups entries if that format
- * ever changes (no error, just wrong/missing entries in the summary).
  * @param {import('../normalizers').EntityTree} tree - normalize() output
  * @param {string} inputPath - path to the source file, recorded as-is
  * @returns {{input: string, timestamp: string, toolVersion: string, counts: {collections: number, fields: number, relations: number}, collections: Object.<string, {fields: string[], relations: string[]}>}}
  */
 function buildMeta(tree, inputPath) {
-  const counts = { collections: 0, fields: 0, relations: 0 };
-  const collections = {};
-
-  for (const key of Object.keys(tree)) {
-    const [kind, rest] = key.split(':');
-    if (kind === 'collection') {
-      counts.collections++;
-      collections[rest] = collections[rest] || { fields: [], relations: [] };
-    } else if (kind === 'field') {
-      counts.fields++;
-      const [collection, field] = rest.split('.');
-      collections[collection] = collections[collection] || { fields: [], relations: [] };
-      collections[collection].fields.push(field);
-    } else if (kind === 'relation') {
-      counts.relations++;
-      const [collection, field] = rest.split('.');
-      collections[collection] = collections[collection] || { fields: [], relations: [] };
-      collections[collection].relations.push(field);
-    }
-  }
-
   return {
     input: inputPath,
     timestamp: new Date().toISOString(),
     toolVersion: pkg.version,
-    counts,
-    collections,
+    ...buildTreeSummary(tree),
   };
 }
 

@@ -21,6 +21,10 @@ Schema snapshots as one giant JSON blob are hard to diff, hard to review in a PR
 
 **Not yet built:** rename detection, extract, migrate-plan/apply, rollback plan, SQLite index, Web UI. See [Roadmap](./docs/roadmap-draft.md) for the ordered list — do not assume any of that exists in the code today.
 
+## Versioning
+
+Pre-`1.0.0`: no public API stability guarantee — internal module paths (`core/operations/*`, `core/env.js`, etc.) may move without a major bump. `1.0.0` will freeze a curated export surface (`src/index.js`) and the `EntityTree`/diff-view JSON shapes as the stable contract; changes to those after that point follow semver. See [CHANGELOG.md](./CHANGELOG.md).
+
 ## Install
 
 ```

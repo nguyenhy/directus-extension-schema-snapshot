@@ -1,7 +1,8 @@
 /**
  * Prints a list view (from core/present/list.js) as CLI text — one row
  * per schema-snapshots/meta.json event: event id, action (`add <hash>` or
- * `undo <eventId>`), timestamp.
+ * `undo <eventId>`), commit timestamp, event timestamp (see
+ * buildListView's doc comment for why both are shown, not just one).
  *
  * `cache-ref` (the GitStore commit sha) is hidden by default — it's a
  * disposable id, regenerated every `sync`, so leading with it invites
@@ -27,14 +28,14 @@ function printListView(view, { showCacheRef = false } = {}) {
   const actionWidth = Math.max(6, ...view.versions.map((v) => v.action.length));
   console.log(`${view.count} version${view.count === 1 ? '' : 's'} (newest first):\n`);
   if (showCacheRef) {
-    console.log(`  cache-ref  event  ${'action'.padEnd(actionWidth)}  timestamp`);
+    console.log(`  cache-ref  event  ${'action'.padEnd(actionWidth)}  commit-timestamp     event-timestamp`);
     for (const v of view.versions) {
-      console.log(`  ${v.shortId}    ${v.event.padEnd(5)}  ${v.action.padEnd(actionWidth)}  ${v.timestamp}`);
+      console.log(`  ${v.shortId}    ${v.event.padEnd(5)}  ${v.action.padEnd(actionWidth)}  ${v.commitTimestamp}  ${v.eventTimestamp}`);
     }
   } else {
-    console.log(`  event  ${'action'.padEnd(actionWidth)}  timestamp`);
+    console.log(`  event  ${'action'.padEnd(actionWidth)}  commit-timestamp     event-timestamp`);
     for (const v of view.versions) {
-      console.log(`  ${v.event.padEnd(5)}  ${v.action.padEnd(actionWidth)}  ${v.timestamp}`);
+      console.log(`  ${v.event.padEnd(5)}  ${v.action.padEnd(actionWidth)}  ${v.commitTimestamp}  ${v.eventTimestamp}`);
     }
   }
 }

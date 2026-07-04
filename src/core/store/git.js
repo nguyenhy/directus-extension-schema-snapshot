@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const simpleGit = require('simple-git');
+const { simpleGit } = require('simple-git');
 const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
+const { SourceNotFoundError, NoVersionsError } = require('../errors');
 
 // Fixed filename for the raw, pre-normalize source (see set()/getRaw()) —
 // lives at the repo root, alongside the per-entity "kind/name.json" files
@@ -268,7 +269,7 @@ class GitStore {
     try {
       content = await this.git.show([`${id}:${RAW_SOURCE_FILE}`]);
     } catch {
-      throw new Error(`No raw source stored for commit ${id}`);
+      throw new SourceNotFoundError(`No raw source stored for commit ${id}`);
     }
     return JSON.parse(content);
   }
@@ -294,7 +295,7 @@ class GitStore {
     await this.init();
     const versions = await this.list();
     if (versions.length === 0) {
-      throw new Error('No versions to remove');
+      throw new NoVersionsError('No versions to remove');
     }
     const revertedId = versions[0].id;
     const previousTree = await this.get(revertedId);

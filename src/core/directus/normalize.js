@@ -1,3 +1,5 @@
+const { UnknownEntityKindError } = require('../errors');
+
 /**
  * Directus system fields stripped from every entity, at every nesting level.
  * NOTE: this strip is recursive (see stripVolatile) — a field legitimately
@@ -45,7 +47,7 @@ function entityKey(kind, item) {
   if (kind === 'collections') return `collection:${item.collection}`;
   if (kind === 'fields') return `field:${item.collection}.${item.field}`;
   if (kind === 'relations') return `relation:${item.collection}.${item.field}`;
-  throw new Error(`Unknown entity kind "${kind}"`);
+  throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
 }
 
 /**
@@ -64,7 +66,9 @@ function entityKey(kind, item) {
 function normalize(rawSchema) {
   const root = rawSchema && rawSchema.data ? rawSchema.data : rawSchema;
   const tree = {};
-  for (const kind of ['collections', 'fields', 'relations']) {
+  /** @type {('collections'|'fields'|'relations')[]} */
+  const kinds = ['collections', 'fields', 'relations'];
+  for (const kind of kinds) {
     const items = Array.isArray(root[kind]) ? root[kind] : [];
     for (const item of items) {
       const key = entityKey(kind, item);

@@ -1,19 +1,45 @@
 {
   "name": "schema-snapshot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Directus schema snapshot normalize + diff toolset",
   "type": "commonjs",
   "bin": {
     "schema-snapshot": "./src/cli/index.js"
   },
-  "main": "./src/core/normalize.js",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "types"
+  ],
+  "types": "./types/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenhy/directus-extension-schema-snapshot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nguyenhy/directus-extension-schema-snapshot/issues"
+  },
+  "homepage": "https://github.com/nguyenhy/directus-extension-schema-snapshot#readme",
   "scripts": {
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/**/*.test.js",
+    "types:build": "tsc",
+    "types:test": "tsc --noEmit -p tsconfig.test-types.json",
+    "prepack": "npm run types:build"
   },
   "license": "MIT",
   "dependencies": {
     "commander": "15.0.0",
     "dotenv": "17.4.2",
     "simple-git": "3.36.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
   }
 }

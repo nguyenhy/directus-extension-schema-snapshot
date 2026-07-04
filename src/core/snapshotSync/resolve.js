@@ -1,6 +1,7 @@
 const fs = require('fs');
 const { readEventLog, activeAddEvents, parseSyncMessage } = require('./eventLog');
 const { contentHash } = require('../hash');
+const { AmbiguousRefError, EventNotFoundError } = require('../errors');
 
 function findEventById(log, eventId) {
   return activeAddEvents(log).find((e) => e.id === eventId);
@@ -9,7 +10,7 @@ function findEventById(log, eventId) {
 function findEventByHashPrefix(log, hashPrefix) {
   const matches = activeAddEvents(log).filter((e) => e.hash.startsWith(hashPrefix));
   if (matches.length > 1) {
-    throw new Error(
+    throw new AmbiguousRefError(
       `Ambiguous hash prefix "${hashPrefix}" matches ${matches.length} events: ${matches.map((e) => e.id).join(', ')} — use a longer prefix`
     );
   }
@@ -80,7 +81,7 @@ async function resolveRef(ref, { snapshotsDir, store, versions }) {
   const event = isEventId ? findEventById(log, ref) : findEventByHashPrefix(log, ref);
 
   if (!event) {
-    throw new Error(
+    throw new EventNotFoundError(
       isEventId
         ? `No active event "${ref}" in schema-snapshots/meta.json`
         : `No active event with hash prefix "${ref}" in schema-snapshots/meta.json`
@@ -91,7 +92,7 @@ async function resolveRef(ref, { snapshotsDir, store, versions }) {
   const commit = findBySyncMessage(allVersions, event) || (await findByContentHash(store, allVersions, event));
 
   if (!commit) {
-    throw new Error(
+    throw new EventNotFoundError(
       `Event "${event.id}" (${event.hash.slice(0, 7)}) not found in the local GitStore cache — run \`add\`/\`sync\` first, or pass --cache-ref with a raw commit sha`
     );
   }

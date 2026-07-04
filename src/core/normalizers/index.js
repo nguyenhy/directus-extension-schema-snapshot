@@ -1,4 +1,5 @@
 const directus = require('../directus/normalize');
+const { UnknownSchemaTypeError } = require('../errors');
 
 /**
  * Flat map keyed by entityKey()'s "kind:name" format (see
@@ -17,6 +18,10 @@ const directus = require('../directus/normalize');
  * @typedef {object} Normalizer
  * @property {(rawSchema: object) => EntityTree} normalize -
  *   raw parsed JSON -> EntityTree.
+ * @property {(tree: EntityTree) => object} [denormalize] -
+ *   EntityTree -> raw schema shape, optional (only normalizers that
+ *   support rebuilding snapshots implement this — see extract.js's
+ *   snapshot/snapshotFile handling).
  */
 
 /** @type {Object.<string, Normalizer>} */
@@ -35,7 +40,7 @@ const normalizers = {
 function getNormalizer(type) {
   const normalizer = normalizers[type];
   if (!normalizer) {
-    throw new Error(`Unknown schema type "${type}". Available: ${Object.keys(normalizers).join(', ')}`);
+    throw new UnknownSchemaTypeError(`Unknown schema type "${type}". Available: ${Object.keys(normalizers).join(', ')}`);
   }
   return normalizer;
 }

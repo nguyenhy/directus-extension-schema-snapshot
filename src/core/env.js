@@ -1,5 +1,6 @@
 const { GitStore } = require('./store/git');
 const { getParser } = require('./parsers');
+const { UnknownStoreTypeError } = require('./errors');
 
 /**
  * Composition root — the only place a concrete Store or Parser
@@ -33,7 +34,7 @@ function createStore(storeType, storeDir) {
     case 'git':
       return new GitStore(storeDir);
     default:
-      throw new Error(`Unknown store type "${storeType}". Available: git`);
+      throw new UnknownStoreTypeError(`Unknown store type "${storeType}". Available: git`);
   }
 }
 

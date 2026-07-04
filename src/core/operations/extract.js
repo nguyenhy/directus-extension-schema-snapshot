@@ -6,6 +6,7 @@ const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
 const { buildExtractView } = require('../present/extract');
 const { buildTreeSummary } = require('../treeSummary');
 const pkg = require('../../../package.json');
+const { UnknownExtractModeError, UnsupportedComboError, SchemaSnapshotError } = require('../errors');
 
 /**
  * Builds the meta.json summary for one extract run.
@@ -87,17 +88,17 @@ function verifyMerge(treeOld, merged, result, mode) {
  * In dry-run mode (default), returns the partial tree plus the dir it
  * *would* be written to — no files written. Pass dryRun: false to actually write it.
  * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object, snapshot?: boolean, snapshotFile?: string}} params
- * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean}>}
+ * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean, verification?: object} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean, verification?: object}>}
  */
 async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, subdirFormat, dryRun = true, store, parse, snapshot, snapshotFile }) {
   if (mode !== 'added' && mode !== 'removed' && mode !== 'modified') {
-    throw new Error(`Unknown extract mode "${mode}". Available: added, removed, modified`);
+    throw new UnknownExtractModeError(`Unknown extract mode "${mode}". Available: added, removed, modified`);
   }
 
   const normalizer = getNormalizer(schemaType);
   const { normalize, denormalize } = normalizer;
   if ((snapshot || snapshotFile) && !denormalize) {
-    throw new Error(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
+    throw new SchemaSnapshotError(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
   }
 
   const oldIsFile = fs.existsSync(oldSchema);
@@ -106,7 +107,7 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
   // Only 3 arg combos are supported: file+file, hash+file, hash+hash.
   // file+hash (old as file, new as version id) is not a supported combo.
   if (oldIsFile && !newIsFile) {
-    throw new Error('Unsupported combo: <old> is a file and <new> is a version id. Supported: file+file, hash+file, hash+hash.');
+    throw new UnsupportedComboError('Unsupported combo: <old> is a file and <new> is a version id. Supported: file+file, hash+file, hash+hash.');
   }
 
   let result, treeOld, treeNew;

@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('../../core/platform/fs');
 const { createEnv } = require('../../core/env');
 const { getRawSourceView } = require('../../core/operations/get');
 const { resolveRef } = require('../../core/snapshotSync/resolve');
@@ -22,7 +22,7 @@ async function cmdGet(id, options) {
   const view = await getRawSourceView({ id: resolvedId, store });
 
   if (options.outFile) {
-    fs.writeFileSync(options.outFile, JSON.stringify(view.raw, null, 2));
+    fs.writeFile(options.outFile, JSON.stringify(view.raw, null, 2));
     console.log(`Wrote ${options.outFile}`);
     return;
   }

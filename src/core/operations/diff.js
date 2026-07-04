@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('../platform/fs');
 const { getNormalizer } = require('../normalizers');
 const { diff } = require('../diff');
 const { buildDiffView } = require('../present/diff');
@@ -21,8 +21,8 @@ const { buildDiffView } = require('../present/diff');
  */
 async function diffSchemas({ a, b, schemaType, store, parse }) {
   const { normalize } = getNormalizer(schemaType);
-  const aIsFile = fs.existsSync(a);
-  const bIsFile = fs.existsSync(b);
+  const aIsFile = fs.exists(a);
+  const bIsFile = fs.exists(b);
 
   let result, treeOld, treeNew;
   if (!aIsFile && !bIsFile) {

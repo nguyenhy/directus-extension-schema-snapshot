@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('../core/platform/fs');
 const { FileNotFoundError, InvalidJSONError } = require('../core/errors');
 
 /**
@@ -14,10 +14,10 @@ const { FileNotFoundError, InvalidJSONError } = require('../core/errors');
  * @throws {Error} "File not found" or "Invalid JSON in ..."
  */
 function parseJSONFile(filePath) {
-  if (!fs.existsSync(filePath)) {
+  if (!fs.exists(filePath)) {
     throw new FileNotFoundError(`File not found: ${filePath}`);
   }
-  const raw = fs.readFileSync(filePath, 'utf8');
+  const raw = fs.readFile(filePath);
   try {
     return JSON.parse(raw);
   } catch (err) {

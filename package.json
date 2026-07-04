@@ -39,7 +39,10 @@
     "simple-git": "3.36.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/node": "^26.1.0",
+    "semantic-release": "^25.0.5",
     "typescript": "^6.0.3"
   }
 }

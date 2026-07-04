@@ -1,3 +1,12 @@
+## [1.0.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.0...v1.0.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* correct bin path with `npm pkg fix` ([8aff5d5](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/8aff5d50f9f0c63271775af4817a462b492fffc0))
+* correct package-lock after use node 22 to install ([8e13315](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/8e133150dbc20623ac99425ba9504d1ac89fba36))
+* src/cli/index.js not executable ([9f57956](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/9f5795681a37eb1e0062f2be5f11eda6188f566d))
+
 # 1.0.0 (2026-07-04)
 
 

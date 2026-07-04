@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const simpleGit = require('simple-git');
+const { simpleGit } = require('simple-git');
 const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
 const { SourceNotFoundError, NoVersionsError } = require('../errors');
 

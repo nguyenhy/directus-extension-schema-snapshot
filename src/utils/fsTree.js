@@ -88,4 +88,38 @@ function readTreeFromDir(dir) {
   return tree;
 }
 
-module.exports = { runSubDir, writeTreeToDir, readTreeFromDir, SUBDIR_PLACEHOLDERS };
+/**
+ * Like writeTreeToDir(), but only touches files whose entity actually
+ * changed relative to `previousTree` — writes added/modified entities,
+ * deletes removed ones, leaves unchanged ones untouched. Used by
+ * GitStore.set() so a commit's file I/O is proportional to the diff size,
+ * not to the full tree size (see writeTreeToDir()'s GOTCHA re: key format,
+ * which applies here too).
+ * @param {import('../core/normalizers').EntityTree} tree - new tree to write
+ * @param {import('../core/normalizers').EntityTree} previousTree - tree
+ *   currently on disk (as read by readTreeFromDir()), used to skip
+ *   unchanged entities and find removed ones
+ * @param {string} dir - target directory
+ */
+function writeTreeDelta(tree, previousTree, dir) {
+  const oldKeys = Object.keys(previousTree);
+  const newKeys = new Set(Object.keys(tree));
+
+  for (const key of oldKeys) {
+    if (newKeys.has(key)) continue;
+    const [kind, name] = key.split(':');
+    const file = path.join(dir, kind, `${name}.json`);
+    if (fs.existsSync(file)) fs.rmSync(file);
+  }
+
+  for (const key of newKeys) {
+    if (JSON.stringify(previousTree[key]) === JSON.stringify(tree[key])) continue;
+    const [kind, name] = key.split(':');
+    const kindDir = path.join(dir, kind);
+    fs.mkdirSync(kindDir, { recursive: true });
+    const file = path.join(kindDir, `${name}.json`);
+    fs.writeFileSync(file, JSON.stringify(tree[key], null, 2) + '\n');
+  }
+}
+
+module.exports = { runSubDir, writeTreeToDir, writeTreeDelta, readTreeFromDir, SUBDIR_PLACEHOLDERS };

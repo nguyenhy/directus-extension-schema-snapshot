@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const simpleGit = require('simple-git');
-const { writeTreeToDir, readTreeFromDir } = require('../../utils/fsTree');
+const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
 
 // Fixed filename for the raw, pre-normalize source (see set()/getRaw()) —
 // lives at the repo root, alongside the per-entity "kind/name.json" files
@@ -51,20 +51,6 @@ function batchCatFile(dir, shas) {
 }
 
 /**
- * Removes everything in dir except .git, so a fresh writeTreeToDir() call
- * accurately reflects removed entities too (git then sees them as deleted
- * files, not just files git add -A happens to ignore).
- * @param {string} dir
- */
-function clearWorkingTree(dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir)) {
-    if (entry === '.git') continue;
-    fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-  }
-}
-
-/**
  * Git-backed Store: every version is a full commit of the normalized tree,
  * not a delta — reading any version is a direct read (git show/checkout),
  * never a chain-walk or replay. See docs/architecture.md#store for the
@@ -87,6 +73,56 @@ class GitStore {
     if (!hasOwnGit) {
       await this.git.init();
     }
+  }
+
+  /**
+   * Wipes this store's directory entirely (including .git) and
+   * reinitializes it empty — see store.js's `reset` contract doc for why
+   * this is safe here (rebuildable cache) and unsafe in general. Only
+   * caller today is core/operations/sync.js.
+   * @returns {Promise<void>}
+   */
+  async reset() {
+    fs.rmSync(this.dir, { recursive: true, force: true });
+    fs.mkdirSync(this.dir, { recursive: true });
+    this.git = simpleGit(this.dir);
+    await this.init();
+  }
+
+  /**
+   * Path for a readMeta()/writeMeta() sidecar blob — kept alongside this
+   * store's dir (a sibling, not inside it, so reset()'s rm -rf never
+   * touches it) rather than inside the git-tracked working tree, since
+   * this data isn't part of version history.
+   * @param {string} key
+   * @returns {string}
+   */
+  metaPath(key) {
+    return path.join(path.dirname(this.dir), `${key}.json`);
+  }
+
+  /**
+   * Reads a sidecar JSON blob written by writeMeta(). Returns null if the
+   * key has never been written.
+   * @param {string} key
+   * @returns {Promise<object | null>}
+   */
+  async readMeta(key) {
+    const p = this.metaPath(key);
+    if (!fs.existsSync(p)) return null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  }
+
+  /**
+   * Writes (overwrites) a sidecar JSON blob outside version history.
+   * @param {string} key
+   * @param {object} data
+   * @returns {Promise<void>}
+   */
+  async writeMeta(key, data) {
+    const p = this.metaPath(key);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(data, null, 2));
   }
 
   /**
@@ -206,8 +242,7 @@ class GitStore {
   async set(tree, message, raw) {
     await this.init();
     const previousTree = readTreeFromDir(this.dir);
-    clearWorkingTree(this.dir);
-    writeTreeToDir(tree, this.dir);
+    writeTreeDelta(tree, previousTree, this.dir);
     if (raw !== undefined) {
       fs.writeFileSync(path.join(this.dir, RAW_SOURCE_FILE), JSON.stringify(raw, null, 2));
     }
@@ -244,12 +279,18 @@ class GitStore {
    * is deleted or rewritten. Every prior version stays reachable via
    * get()/list() exactly as before, including the one just "removed"
    * (its tree is still readable at its original commit id).
+   * @param {string} [message] - commit message override. When omitted,
+   *   falls back to an auto-built "Remove version <shortId> (N added, N
+   *   modified, N removed)" summary. core/operations/remove.js passes the
+   *   `remove: eN (removes eM)` form (see eventLog.js's
+   *   formatRemoveMessage) when a meta.json tombstone was written for this
+   *   removal, so `list` can label the row instead of showing "-".
    * @returns {Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>}
    *   previousTree is the version being undone; tree is the resulting
    *   (now-current) version after the revert.
    * @throws {Error} "No versions to remove" if the store has no commits yet
    */
-  async removeLatest() {
+  async removeLatest(message) {
     await this.init();
     const versions = await this.list();
     if (versions.length === 0) {
@@ -261,17 +302,19 @@ class GitStore {
     // --no-commit instead of --no-edit: git's auto-generated revert message
     // is `Revert "<original commit message>"`, which names nothing useful
     // when the original message was blank (the common case here). Commit
-    // it ourselves with a message that names the actual hash removed plus
-    // what changed, so `list`/reflog-free history stays informative.
+    // it ourselves instead — either the caller's message, or a fallback
+    // that names the actual hash removed plus what changed, so
+    // `list`/reflog-free history stays informative either way.
     await this.git.raw(['revert', '--no-commit', 'HEAD']);
     const tree = readTreeFromDir(this.dir);
 
     const { diff } = require('../diff');
     const { added, modified, removed } = diff(previousTree, tree);
-    const message = `Remove version ${revertedId.slice(0, 7)} (${added.length} added, ${modified.length} modified, ${removed.length} removed)`;
+    const commitMessage =
+      message || `Remove version ${revertedId.slice(0, 7)} (${added.length} added, ${modified.length} modified, ${removed.length} removed)`;
 
     await this.git.add('.');
-    const summary = await this.git.commit(message, { '--allow-empty': null });
+    const summary = await this.git.commit(commitMessage, { '--allow-empty': null });
     return { id: summary.commit, revertedId, previousTree, tree };
   }
 }

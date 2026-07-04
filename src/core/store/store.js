@@ -30,16 +30,43 @@
  *   committed via set() with no `raw` argument).
  *
  * @property {function(string, string): Promise<{result: import('../diff').DiffResult, treeOld: import('../normalizers').EntityTree, treeNew: import('../normalizers').EntityTree, idOld: string, idNew: string}>} diffVersions
- *   Diffs two committed versions. MUST auto-sort by time so
- *   diffVersions(a, b) === diffVersions(b, a) — always old→new in the
- *   result, regardless of argument order (GitStore sorts by commit time).
+ *   Diffs two committed versions. MUST auto-sort by a monotonic version-order
+ *   signal so diffVersions(a, b) === diffVersions(b, a) — always old→new in
+ *   the result, regardless of argument order. GitStore sorts by commit-graph
+ *   depth (`rev-list --count`), NOT commit timestamp — see git.js's
+ *   commitDepth() doc comment for why wall-clock time is unreliable here
+ *   (1-second resolution breaks symmetry for same-second commits).
  *
- * @property {function(): Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>} removeLatest
+ * @property {function(string=): Promise<{id: string, revertedId: string, previousTree: import('../normalizers').EntityTree, tree: import('../normalizers').EntityTree}>} removeLatest
  *   Removes the most recent version. MUST be non-destructive — every
  *   prior version, including the one just "removed", MUST remain
  *   readable via get()/list() afterward (GitStore implements this as a
  *   revert commit, never history rewrite/deletion). Throws if the store
- *   has no versions yet.
+ *   has no versions yet. Optional `message` arg overrides the
+ *   implementation's default summary message (used by
+ *   core/operations/remove.js to stamp a `remove: eN (removes eM)` label
+ *   when a meta.json tombstone is written alongside the removal).
+ *
+ * @property {function(string): Promise<object | null>} readMeta
+ *   Reads a small sidecar JSON blob keyed by name (e.g. "sync-state"),
+ *   stored outside the versioned tree — for bookkeeping that isn't itself
+ *   a schema version (e.g. core/operations/sync.js's last-synced-hash
+ *   marker). Returns null if nothing has been written for that key yet.
+ *
+ * @property {function(string, object): Promise<void>} writeMeta
+ *   Writes (overwrites) the sidecar JSON blob for the given key. Not part
+ *   of version history — not reachable via get()/list()/diffVersions().
+ *
+ * @property {function(): Promise<void>} reset
+ *   Wipes ALL history in this store and leaves it empty but usable
+ *   (get()/set() etc. work immediately after, no re-construction needed).
+ *   Unlike every other method here, this IS destructive by design — it
+ *   exists for `core/operations/sync.js`, which treats this store as a
+ *   disposable, fully-rebuildable cache of `schema-snapshots/meta.json`
+ *   (see docs/proposal-schema-snapshot-sync.md). Callers must only call
+ *   this on a store they know is being rebuilt from another source of
+ *   truth immediately after, never on a store that's the only copy of
+ *   its data.
  */
 
 module.exports = {};

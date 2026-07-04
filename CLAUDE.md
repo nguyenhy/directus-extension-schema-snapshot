@@ -6,9 +6,12 @@ Agent-facing entry point. Read this first, then [docs/architecture.md](./docs/ar
 
 CLI tool: normalizes a raw JSON schema export (Directus today) into a flat, diffable `EntityTree`, computes structured diffs between versions, extracts partial snapshots (added/removed/modified), and stores versions as git commits. See [README.md](./README.md) "What it is / What it's not" before assuming scope — no migration engine, no live sync, no data backfill.
 
-## Tooling
+## Tooling & Discovery
 
-`.codegraph/` present at repo root — for any "how does X work" / "where is Y" / "who calls Z" question, use CodeGraph before `Read`/`Grep`/`cat`. In Claude Code, CodeGraph's MCP tools are deferred (schema not loaded by default) — call `ToolSearch("select:codegraph_explore,codegraph_node,codegraph_callers,codegraph_search")` once at session start to load them, then prefer `codegraph_explore` over reading whole files. If CodeGraph tools are unavailable, fall back to `codegraph explore "<symbol>"` / `codegraph node <symbol>` via shell.
+- **CodeGraph First:** For any question regarding structure, architecture, definitions ("how does X work", "where is Y", "who calls Z"), you must use `codegraph_explore` BEFORE using `Grep`, `FileRead`, or `cat`.
+- **Zero Raw Code Dumping:** Do not read whole files to locate a symbol. Use `codegraph_explore` to isolate the specific code context graph nodes.
+- **Fallbacks:** Only use `Grep` or `FileRead` if a targeted symbol cannot be resolved by the index or if modifying file contents directly.
+
 
 ## Before touching code
 

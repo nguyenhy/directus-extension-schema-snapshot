@@ -2,7 +2,11 @@
   "branches": ["main"],
   "plugins": [
     ["@semantic-release/commit-analyzer", {
-      "preset": "angular"
+      "preset": "angular",
+      "releaseRules": [
+        { "type": "refactor", "release": "patch" },
+        { "type": "revert", "release": "patch" }
+      ]
     }],
     ["@semantic-release/release-notes-generator", {
       "preset": "angular"

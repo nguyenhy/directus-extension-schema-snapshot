@@ -1,5 +1,7 @@
 # schema-snapshot
 
+> **Pre-1.0, unstable.** Breaking changes may land at any time without notice. Pin an exact version if you depend on this.
+
 ## What it is
 
 A small toolset that turns a raw JSON schema snapshot (e.g. Directus schema export) into a git-diffable, AI-readable format, then computes structured diffs between two versions (added / removed / modified).

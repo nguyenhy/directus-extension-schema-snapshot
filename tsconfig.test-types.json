@@ -1,9 +1,4 @@
 {
-  // CI type-check only, never publishes output. Diverges from tsconfig.base.json in:
-  // - noEmit: this config only verifies, base has no emit-mode opinion set
-  // - include: adds test/types/**/*.ts so the sample external-consumer file
-  //   (which imports src/index.js) is type-checked against the public API,
-  //   base's include list only covers src/ since it doesn't know about tests
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true

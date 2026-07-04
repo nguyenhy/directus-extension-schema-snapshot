@@ -1,7 +1,4 @@
 {
-  // Real build: emits .d.ts for publish. Diverges from tsconfig.base.json in:
-  // - declaration/emitDeclarationOnly/outDir: this config's whole purpose is to emit types, base has none
-  // - rootDir: fixes output layout to mirror src/ under types/, base has no output so no rootDir needed
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "declaration": true,

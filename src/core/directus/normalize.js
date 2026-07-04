@@ -66,7 +66,9 @@ function entityKey(kind, item) {
 function normalize(rawSchema) {
   const root = rawSchema && rawSchema.data ? rawSchema.data : rawSchema;
   const tree = {};
-  for (const kind of ['collections', 'fields', 'relations']) {
+  /** @type {('collections'|'fields'|'relations')[]} */
+  const kinds = ['collections', 'fields', 'relations'];
+  for (const kind of kinds) {
     const items = Array.isArray(root[kind]) ? root[kind] : [];
     for (const item of items) {
       const key = entityKey(kind, item);

@@ -18,6 +18,10 @@ const { UnknownSchemaTypeError } = require('../errors');
  * @typedef {object} Normalizer
  * @property {(rawSchema: object) => EntityTree} normalize -
  *   raw parsed JSON -> EntityTree.
+ * @property {(tree: EntityTree) => object} [denormalize] -
+ *   EntityTree -> raw schema shape, optional (only normalizers that
+ *   support rebuilding snapshots implement this — see extract.js's
+ *   snapshot/snapshotFile handling).
  */
 
 /** @type {Object.<string, Normalizer>} */

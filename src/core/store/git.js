@@ -104,6 +104,42 @@ class GitStore {
   }
 
   /**
+   * Path for a readMeta()/writeMeta() sidecar blob — kept alongside this
+   * store's dir (a sibling, not inside it, so reset()'s rm -rf never
+   * touches it) rather than inside the git-tracked working tree, since
+   * this data isn't part of version history.
+   * @param {string} key
+   * @returns {string}
+   */
+  metaPath(key) {
+    return path.join(path.dirname(this.dir), `${key}.json`);
+  }
+
+  /**
+   * Reads a sidecar JSON blob written by writeMeta(). Returns null if the
+   * key has never been written.
+   * @param {string} key
+   * @returns {Promise<object | null>}
+   */
+  async readMeta(key) {
+    const p = this.metaPath(key);
+    if (!fs.existsSync(p)) return null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  }
+
+  /**
+   * Writes (overwrites) a sidecar JSON blob outside version history.
+   * @param {string} key
+   * @param {object} data
+   * @returns {Promise<void>}
+   */
+  async writeMeta(key, data) {
+    const p = this.metaPath(key);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(data, null, 2));
+  }
+
+  /**
    * Returns all committed versions, newest first.
    * Returns [] when the repo has no commits yet.
    * @returns {Promise<{id: string, timestamp: string, message: string}[]>}

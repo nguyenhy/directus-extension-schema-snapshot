@@ -1,26 +1,25 @@
-const fs = require('fs');
-const path = require('path');
 const { getNormalizer } = require('../normalizers');
 const { readEventLog, readSource, formatSyncMessage, formatRemoveMessage } = require('../snapshotSync/eventLog');
 const { contentHash } = require('../hash');
 
-function syncStatePath(storeDir) {
-  return path.join(path.dirname(storeDir), 'sync-state.json');
+const SYNC_STATE_KEY = 'sync-state';
+
+/**
+ * @param {import('../store/store').Store} store
+ * @returns {Promise<{syncedHash: string | null}>}
+ */
+async function readSyncState(store) {
+  const state = await store.readMeta(SYNC_STATE_KEY);
+  return state || { syncedHash: null };
 }
 
 /**
- * @param {string} storeDir - local GitStore cache dir (e.g. ".snapshot/repo")
- * @returns {{syncedHash: string | null}}
+ * @param {import('../store/store').Store} store
+ * @param {{syncedHash: string}} state
+ * @returns {Promise<void>}
  */
-function readSyncState(storeDir) {
-  const p = syncStatePath(storeDir);
-  if (!fs.existsSync(p)) return { syncedHash: null };
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
-}
-
-function writeSyncState(storeDir, state) {
-  fs.mkdirSync(path.dirname(syncStatePath(storeDir)), { recursive: true });
-  fs.writeFileSync(syncStatePath(storeDir), JSON.stringify(state, null, 2));
+async function writeSyncState(store, state) {
+  await store.writeMeta(SYNC_STATE_KEY, state);
 }
 
 /**
@@ -42,12 +41,12 @@ function writeSyncState(storeDir, state) {
  * replay and throws rather than silently mis-rebuilding if a `remove`
  * event doesn't match it. Fixing this for real needs a
  * remove-this-specific-commit Store operation, not a revert of HEAD.
- * @param {{snapshotsDir: string, schemaType: string, store: import('../store/store').Store, storeDir: string}} params
+ * @param {{snapshotsDir: string, schemaType: string, store: import('../store/store').Store}} params
  * @returns {Promise<{syncedCount: number, syncedHash: string}>}
  * @throws {Error} if a `remove` event doesn't match what live execution
  *   would have targeted at that point — see the KNOWN LIMITATION note
  */
-async function syncSnapshots({ snapshotsDir, schemaType, store, storeDir }) {
+async function syncSnapshots({ snapshotsDir, schemaType, store }) {
   const { normalize } = getNormalizer(schemaType);
   const log = readEventLog(snapshotsDir);
 
@@ -78,8 +77,8 @@ async function syncSnapshots({ snapshotsDir, schemaType, store, storeDir }) {
   }
 
   const syncedHash = contentHash(log);
-  writeSyncState(storeDir, { syncedHash });
+  await writeSyncState(store, { syncedHash });
   return { syncedCount, syncedHash };
 }
 
-module.exports = { syncSnapshots, readSyncState, writeSyncState, syncStatePath };
+module.exports = { syncSnapshots, readSyncState, writeSyncState };

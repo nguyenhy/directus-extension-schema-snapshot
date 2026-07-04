@@ -1,3 +1,4 @@
+const { createEnv } = require('../../core/env');
 const { statusView } = require('../../core/operations/status');
 
 /**
@@ -7,7 +8,8 @@ const { statusView } = require('../../core/operations/status');
  * @param {{storeDir: string, snapshotsDir: string, json?: boolean}} options
  */
 async function cmdStatus(options) {
-  const view = statusView({ snapshotsDir: options.snapshotsDir, storeDir: options.storeDir });
+  const { store } = createEnv({ storeDir: options.storeDir });
+  const view = await statusView({ snapshotsDir: options.snapshotsDir, store });
 
   if (options.json) {
     process.stdout.write(JSON.stringify(view, null, 2) + '\n');

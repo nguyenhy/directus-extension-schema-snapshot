@@ -47,6 +47,16 @@
  *   core/operations/remove.js to stamp a `remove: eN (removes eM)` label
  *   when a meta.json tombstone is written alongside the removal).
  *
+ * @property {function(string): Promise<object | null>} readMeta
+ *   Reads a small sidecar JSON blob keyed by name (e.g. "sync-state"),
+ *   stored outside the versioned tree — for bookkeeping that isn't itself
+ *   a schema version (e.g. core/operations/sync.js's last-synced-hash
+ *   marker). Returns null if nothing has been written for that key yet.
+ *
+ * @property {function(string, object): Promise<void>} writeMeta
+ *   Writes (overwrites) the sidecar JSON blob for the given key. Not part
+ *   of version history — not reachable via get()/list()/diffVersions().
+ *
  * @property {function(): Promise<void>} reset
  *   Wipes ALL history in this store and leaves it empty but usable
  *   (get()/set() etc. work immediately after, no re-construction needed).

@@ -9,6 +9,20 @@ const { UnknownEntityKindError } = require('../errors');
 const VOLATILE_KEYS = new Set(['id', 'date_created', 'date_updated', 'user_created', 'user_updated']);
 
 /**
+ * Array-valued top-level schema sections -> singular key label.
+ * Order here is also the order denormalize() emits them back in.
+ */
+const ARRAY_KINDS = {
+  collections: 'collection',
+  fields: 'field',
+  systemfields: 'systemfield',
+  relations: 'relation',
+};
+
+/** Primitive top-level schema fields, stored one-per-key under the "meta" label. */
+const SCALAR_KINDS = ['version', 'directus', 'vendor'];
+
+/**
  * Recursively strips VOLATILE_KEYS and sorts remaining object keys.
  * Sorting is not cosmetic — diff.js's deepEqual() relies on stable key
  * order (it compares via JSON.stringify, not structural equality), so this
@@ -32,81 +46,89 @@ function stripVolatile(value) {
 }
 
 /**
- * Builds the flat-map key for one entity: "kind:name".
- * This "kind:name" string is a de facto wire format — downstream code
- * parses it back apart via string-split (fsTree.js splits on ":", then
- * core/operations/normalize.js's buildMeta() further splits the name on "."
- * for field/relation entries). Changing this format breaks both without
- * any compile-time warning.
- * @param {'collections'|'fields'|'relations'} kind - plural Directus schema section name
- * @param {object} item - raw item from that section (must have .collection, and .field for fields/relations)
- * @returns {string} e.g. "collection:orders", "field:orders.status", "relation:orders.customer"
- * @throws {Error} if kind is not one of the three known values
+ * Builds the flat-map key for one array-section entity: "kind:index".
+ * Deliberately index-based, not name-based — entity content (e.g.
+ * item.collection) is attacker-controlled input and must never end up as
+ * a filesystem path segment (see fsTree.js, which uses this key's "name"
+ * half as a filename). Index is ours to assign, never derived from input.
+ * @param {'collections'|'fields'|'systemfields'|'relations'} kind - plural schema section name
+ * @param {number} index - position of the item within its section array
+ * @returns {string} e.g. "collection:0", "field:12"
+ * @throws {Error} if kind is not one of the known array section names
  */
-function entityKey(kind, item) {
-  if (kind === 'collections') return `collection:${item.collection}`;
-  if (kind === 'fields') return `field:${item.collection}.${item.field}`;
-  if (kind === 'relations') return `relation:${item.collection}.${item.field}`;
-  throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
+function entityKey(kind, index) {
+  const label = ARRAY_KINDS[kind];
+  if (!label) {
+    throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
+  }
+  return `${label}:${index}`;
 }
 
 /**
  * Directus schema export -> flat map of entityKey -> cleaned entity.
- * Accepts either { data: { collections, fields, relations } } or the bare
- * { collections, fields, relations } shape.
+ * Accepts either { data: { version, directus, vendor, collections, fields,
+ * systemfields, relations } } or the bare (un-{data}-wrapped) shape.
  *
- * GOTCHA: this function is Directus-shape-specific, not generic JSON
- * normalization — it only reads root.collections/fields/relations. If none
- * of those arrays are present (e.g. arbitrary non-Directus JSON, or an
- * already-normalized tree fed back in), it silently returns an empty
- * object `{}` rather than throwing. No warning is printed.
+ * Scalar fields (version, directus, vendor) each become their own
+ * "meta:<name>" entry. Array sections become "<kind>:<index>" entries, one
+ * per item, keyed by position — never by item content.
  * @param {object} rawSchema - raw parsed JSON, Directus schema export shape
  * @returns {import('../normalizers').EntityTree}
  */
 function normalize(rawSchema) {
-  const root = rawSchema && rawSchema.data ? rawSchema.data : rawSchema;
+  const root = (rawSchema && rawSchema.data) || rawSchema || {};
   const tree = {};
-  /** @type {('collections'|'fields'|'relations')[]} */
-  const kinds = ['collections', 'fields', 'relations'];
-  for (const kind of kinds) {
-    const items = Array.isArray(root[kind]) ? root[kind] : [];
-    for (const item of items) {
-      const key = entityKey(kind, item);
-      tree[key] = stripVolatile(item);
+
+  for (const scalarKind of SCALAR_KINDS) {
+    if (Object.prototype.hasOwnProperty.call(root, scalarKind)) {
+      tree[`meta:${scalarKind}`] = stripVolatile(root[scalarKind]);
     }
   }
+
+  for (const kind of Object.keys(ARRAY_KINDS)) {
+    const items = Array.isArray(root[kind]) ? root[kind] : [];
+    items.forEach((item, index) => {
+      tree[entityKey(kind, index)] = stripVolatile(item);
+    });
+  }
+
   return tree;
 }
 
 /**
  * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
- * Groups entities by their kind (collections, fields, relations) and sorts
- * them stably by their keys.
+ * Groups array-section entities by kind, sorted numerically by their
+ * original index (NOT string-sorted — "10" must stay after "2"). Rebuilds
+ * scalar fields (version/directus/vendor) from their "meta:*" entries.
  * @param {import('../normalizers').EntityTree} tree
  * @returns {object} Directus schema shape
  */
 function denormalize(tree) {
-  const collections = [];
-  const fields = [];
-  const relations = [];
+  const grouped = { collection: [], field: [], systemfield: [], relation: [] };
+  const scalars = {};
 
-  const keys = Object.keys(tree).sort();
-  for (const key of keys) {
-    const [kind] = key.split(':');
-    if (kind === 'collection') {
-      collections.push(tree[key]);
-    } else if (kind === 'field') {
-      fields.push(tree[key]);
-    } else if (kind === 'relation') {
-      relations.push(tree[key]);
+  for (const key of Object.keys(tree)) {
+    const sepIdx = key.indexOf(':');
+    const kind = key.slice(0, sepIdx);
+    const rest = key.slice(sepIdx + 1);
+    if (kind === 'meta') {
+      scalars[rest] = tree[key];
+    } else if (grouped[kind]) {
+      grouped[kind].push([Number(rest), tree[key]]);
     }
+  }
+
+  for (const kind of Object.keys(grouped)) {
+    grouped[kind].sort((a, b) => a[0] - b[0]);
   }
 
   return {
     data: {
-      collections,
-      fields,
-      relations,
+      ...scalars,
+      collections: grouped.collection.map(([, value]) => value),
+      fields: grouped.field.map(([, value]) => value),
+      systemfields: grouped.systemfield.map(([, value]) => value),
+      relations: grouped.relation.map(([, value]) => value),
     },
   };
 }

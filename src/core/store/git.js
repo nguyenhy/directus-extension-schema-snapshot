@@ -1,5 +1,5 @@
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawnGitCatFileBatch } = require('../platform/proc');
 const { simpleGit } = require('simple-git');
 const platformFs = require('../platform/fs');
 const { writeTreeDelta, readTreeFromDir } = require('../../utils/fsTree');
@@ -20,7 +20,7 @@ const RAW_SOURCE_FILE = '_source.json';
 function batchCatFile(dir, shas) {
   return new Promise((resolve, reject) => {
     if (shas.length === 0) return resolve([]);
-    const child = spawn('git', ['cat-file', '--batch'], { cwd: dir });
+    const child = spawnGitCatFileBatch(dir);
     let buf = Buffer.alloc(0);
     const results = [];
     child.stdout.on('data', (chunk) => {

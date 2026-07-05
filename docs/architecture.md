@@ -1,104 +1,10 @@
 # Architecture
 
-Status: `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `extract`, `sync`, `status` all implemented. Storage is **dual**: `.snapshot/repo` (git-backed `GitStore`, local-only, disposable/rebuildable cache) plus `schema-snapshots/` (host-repo-tracked event log + content-addressed source — the sync-able source of truth, see "Schema-snapshots sync layer" below). See [roadmap-draft.md](./roadmap-draft.md) for what's still ahead (rename detection, migrate-plan/apply, Web UI, auto/manual sync toggle).
+Status: `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `extract`, `sync`, `status` all implemented. See [roadmap-draft.md](./roadmap-draft.md) for what's still ahead (rename detection, migrate-plan/apply, Web UI, auto/manual sync toggle).
 
-## Directory structure
+## Overview
 
-```
-src/
-  core/                     Feature logic. Pure/IO-injected, no CLI dependency — reusable by
-                             any future caller (CLI today, a UI/API later).
-
-    diff.js                   diff(treeOld, treeNew) -> DiffResult
-                               Generic tree-diff. No Directus knowledge, no I/O.
-
-    hash.js                    contentHash(value) -> sha256 hex. Deterministic, sorted-key
-                               JSON hash — the public, cross-device snapshot identity (see
-                               "Schema-snapshots sync layer" below).
-
-    snapshotSync/
-      eventLog.js               readEventLog/writeEventLog/appendAddEvent/appendRemoveEvent/
-                               activeAddEvents/readSource/parseSyncMessage — schema-snapshots/
-                               meta.json + source/ read-write, and the fold-to-active-set logic.
-      resolve.js                resolveRef/resolveArgOrFile — event id ("e3") or content hash ->
-                               local GitStore commit id, via meta.json + sync-produced commit
-                               messages. The only place that translation happens.
-
-    directus/
-      normalize.js             normalize(rawSchema) -> EntityTree
-                               Directus-specific: reads collections/fields/relations, strips
-                               volatile keys (id, date_created, ...), sorts object keys.
-
-    normalizers/
-      index.js                 getNormalizer(type) -> Normalizer   — registry + lookup.
-
-    parsers/
-      index.js                 getParser(format) -> Parser         — registry + lookup.
-
-    store/
-      store.js                  Store contract (JSDoc typedef only, no code) — the interface
-                                every store impl must satisfy.
-      git.js                    GitStore — reference (and only) implementation. Every
-                                version = one commit of the full tree.
-
-    operations/                One file per command's actual logic (normalize/diff/add/list/
-                                show/get/remove/extract/sync/status). Pure orchestration: call
-                                normalizer/parser/store, build a view via present/, return it.
-                                No console.log, no process.exit, no commander. Reusable by a
-                                UI backend.
-      extract.js               Extracts a partial EntityTree of added, removed, or modified entities.
-                                Also exports mergeIntoOld() (reconstructs a full tree for
-                                --snapshot/--snapshot-file) and verifyMerge() (re-diffs the
-                                reconstruction to confirm it matches the extracted mode's keys).
-      sync.js                   syncSnapshots() — wipes .snapshot/repo and rebuilds it from
-                                schema-snapshots/meta.json's active events, every call (not
-                                incremental). readSyncState/writeSyncState manage
-                                .snapshot/sync-state.json ({syncedHash} only).
-      status.js                 statusView() — read-only meta.json-hash vs sync-state.json
-                                comparison.
-
-    present/                    One file per command's view-builder: turns operation output
-                                into a plain, render-agnostic object (JSON-serializable,
-                                CLI/UI-neutral). No string formatting/printing here.
-      extract.js               Extract operation view builder.
-
-    env.js                     createEnv({storeDir, storeType, fileFormat}) -> {store, parse}
-                               Composition root — the ONLY place a concrete Store/Parser is
-                               constructed. See "Pluggability" below.
-
-  cli/                       Everything specific to the command-line interface.
-    index.js                   commander setup: registers subcommands, wires flags, entrypoint.
-    commands/                  One file per command: commander action handler. Thin glue —
-                                calls createEnv() + the matching core/operations/*.js function,
-                                then either JSON.stringify (--json) or hands off to render/.
-      extract.js               Action handler for extract command.
-    render/                     One file per command: printAddView/printDiffView/etc. —
-                                console.log formatting of a present/ view. Only place that
-                                touches stdout.
-      extract.js               CLI printer for extract command.
-
-  utils/                     Small, generic, feature-agnostic helpers — no schema/business
-                              knowledge.
-    parseJson.js                parseJSONFile(path) -> object, clean errors on missing/bad file.
-    fsTree.js                   writeTreeToDir()/readTreeFromDir() (EntityTree <-> "kind/name.json"
-                                files) + runSubDir() (templated, collision-safe subdir naming).
-    timestamp.js                timestamp() — YYYYMMDD-HHmmss formatter.
-
-  config.js                  Reads .env / process.env into one exported config object (CLI
-                              flag defaults). The only file that touches process.env directly.
-
-fixtures/                   Sample schema JSON pairs used for manual/smoke testing (v1.json, v2.json).
-docs/                       Design docs — this file, CLI reference, roadmap.
-test/                       node:test suite (git-store.test.js, store.contract.js — the latter
-                             is a reusable contract test any future Store impl must pass).
-```
-
-**Rule of thumb for where new code goes:**
-- Knows what a "collection/field/relation" is, or talks to git/disk for persistence? → `core/`.
-- One command's pure workflow (call normalizer → call store → build view)? → `core/operations/<command>.js`.
-- Turning that workflow's output into a flat, renderable object? → `core/present/<command>.js`.
-- Only makes sense from a terminal (flags, stdout, prompts)? → `cli/commands/` (parse args, call operation) + `cli/render/` (print the view).
-- Generic enough for an unrelated project (timestamp formatting, generic file I/O)? → `utils/`.
+CLI tool that normalizes a raw Directus schema JSON export into a flat, diffable `EntityTree`, computes structured diffs between versions, and stores each version as a git commit. Every command follows the same 4-layer pipeline: **`cli/commands`** (parse argv) → **`core/operations`** (orchestrate parser/normalizer/store) → **`core/present`** (build a plain view object) → **`cli/render`** (print, or raw JSON via `--json`). See "Flow" below for a concrete trace. Detailed data shapes, config, and the sync layer live in [reference.md](./reference.md) — this file covers structure and the request path only.
 
 ## Flow
 
@@ -107,124 +13,100 @@ Every command follows the same 4-layer pipeline. Concrete example, `add`:
 ```
 cli/index.js (commander registers "add", parses argv)
   -> cli/commands/add.js: cmdAdd(inputPath, options)
-       1. createEnv({storeDir, storeType, fileFormat})   // core/env.js — builds {store, parse}
+       1. createEnv({storeDir, storeType, fileFormat})                // core/env.js — builds {store, parse}
        2. core/operations/add.js: addVersion({inputPath, schemaType, message, store, parse})
-            a. parse(inputPath)                           // core/parsers -> raw JSON object
-            b. getNormalizer(schemaType).normalize(raw)    // core/directus/normalize.js -> EntityTree
-            c. store.set(tree, message)                    // core/store/git.js -> commits, returns {id, previousTree}
-            d. diff(previousTree, tree)                     // core/diff.js -> DiffResult
-            e. buildAddView(id, message, result, ...)       // core/present/add.js -> plain view object
-       3. options.json ? JSON.stringify(view) : printAddView(view)   // cli/render/add.js -> stdout
+            a. parse(inputPath)                                       // core/parsers -> raw JSON object
+            b. getNormalizer(schemaType).normalize(raw)               // core/directus/normalize.js -> EntityTree
+            c. store.set(tree, message)                               // core/store/git.js -> commits, returns {id, previousTree}
+            d. diff(previousTree, tree)                               // core/diff.js -> DiffResult
+            e. buildAddView(id, message, result, ...)                 // core/present/add.js -> plain view object
+       3. options.json ? JSON.stringify(view) : printAddView(view)    // cli/render/add.js -> stdout
 ```
 
 Every other command (`diff`, `list`, `show`, `remove`, `normalize`, `extract`) is the same shape: **cli/commands (parse argv, build env)** → **core/operations (orchestrate: parser/normalizer/store/diff)** → **core/present (build plain view)** → **cli/render (print) or raw JSON (--json)**.
 
-Note that `extract` follows the same 4-layer shape as `diff` (with file-vs-version auto-detect). However, `extract` restricts the argument combinations for `<old>` and `<new>` to exactly three supported combinations: `file` + `file`, `hash` (version ID) + `file`, and `hash` + `hash`. Any combination of `file` + `hash` (where `<old>` is a file path and `<new>` is a version ID) is rejected and throws an error.
-
-When `--snapshot`/`--snapshot-file` is passed, `extractSchemas()` additionally calls `mergeIntoOld(treeOld, deltaTree, mode)` to reconstruct a full, applyable schema (rather than the partial delta), then `verifyMerge(treeOld, merged, result, mode)` to re-diff `treeOld` against the reconstruction and confirm it changed exactly the extracted mode's key set — see "Snapshot reconstruction & merge verification" below.
+Note that `extract` follows the same 4-layer shape as `diff` (with file-vs-version auto-detect), restricted to three supported `<old>`/`<new>` combinations (`file`+`file`, `hash`+`file`, `hash`+`hash`) — see [reference.md](./reference.md#extract-dry-run-behavior) for details.
 
 Why this split: `core/operations/*.js` never imports commander, console, or process — a future Web UI backend calls the exact same functions and gets the exact same view objects, only swapping the last hop (HTTP response instead of stdout print).
 
-## Data structures (pluggable points)
+## Directory structure
 
-### EntityTree — the shape every operation passes around
+```
+├── src/
+│   ├── core/                       # Feature logic. Pure/IO-injected, no CLI dependency.
+│   │   ├── diff.js                 ## Generic tree-diff. No Directus knowledge, no I/O.
+│   │   ├── hash.js                 ## Deterministic content hash — snapshot identity.
+│   │   ├── snapshotSync/
+│   │   │   ├── eventLog.js         ### meta.json + source/ read-write, fold-to-active-set logic.
+│   │   │   └── resolve.js          ### event id / content hash -> GitStore commit id.
+│   │   ├── directus/
+│   │   │   └── normalize.js        ### Directus-specific: rawSchema -> EntityTree.
+│   │   ├── normalizers/
+│   │   │   └── index.js            ### getNormalizer(type) -> Normalizer registry.
+│   │   ├── parsers/
+│   │   │   └── index.js            ### getParser(format) -> Parser registry.
+│   │   ├── store/
+│   │   │   ├── store.js            ### Store contract (JSDoc typedef only).
+│   │   │   └── git.js              ### GitStore — reference (and only) implementation.
+│   │   ├── operations/             ## One file per command's pure orchestration logic.
+│   │   │   ├── extract.js          ### Extract + mergeIntoOld()/verifyMerge() (see reference.md).
+│   │   │   ├── sync.js             ### syncSnapshots() — full rebuild from meta.json, not incremental.
+│   │   │   └── status.js           ### statusView() — read-only meta.json-hash vs sync-state comparison.
+│   │   ├── present/                ## One file per command's view-builder (render-agnostic).
+│   │   └── env.js                  ## createEnv(...) -> {store, parse} — composition root, see "Pluggable points" below.
+│   ├── cli/                        # Everything specific to the command-line interface.
+│   │   ├── index.js                ## commander setup: registers subcommands, wires flags, entrypoint.
+│   │   ├── commands/               ## One file per command: commander action handler (thin glue).
+│   │   └── render/                 ## One file per command: console.log formatting of a present/ view.
+│   ├── utils/                      # Small, generic, feature-agnostic helpers.
+│   │   ├── parseJson.js            ## parseJSONFile(path) -> object.
+│   │   ├── fsTree.js               ## writeTreeToDir()/readTreeFromDir()/runSubDir().
+│   │   └── timestamp.js            ## timestamp() formatter.
+│   └── config.js                   # Reads .env / process.env (see reference.md#configuration).
+├── fixtures/                       # Sample schema JSON pairs for manual/smoke testing.
+├── docs/                           # Design docs — this file, reference.md, cli reference, roadmap.
+└── test/                           # node:test suite (git-store.test.js, store.contract.js).
+```
 
-`{"kind:name": entity, ...}` — a flat map, not a nested tree despite the name. Produced by any `Normalizer.normalize()`, consumed by `diff()`, `Store.set()`, and every `present/*.js`. Key format is `"kind:name"` (e.g. `"field:orders.status"`, `"collection:orders"`, `"relation:orders.customer"`) — defined once in `core/directus/normalize.js`'s `entityKey()`, referenced everywhere else as a de facto wire format (string-split, not parsed via a shared helper — changing the format silently breaks `fsTree.js` and `buildMeta()` without a compile error).
+Per-file JSDoc in each source file documents its exact contract (`@param`/`@returns`, plus GOTCHA notes) — this tree is a map, not a restatement of that contract.
+
+**Rule of thumb for where new code goes:**
+- Knows what a "collection/field/relation" is, or talks to git/disk for persistence? → `core/`.
+- One command's pure workflow (call normalizer → call store → build view)? → `core/operations/<command>.js`.
+- Turning that workflow's output into a flat, renderable object? → `core/present/<command>.js`.
+- Only makes sense from a terminal (flags, stdout, prompts)? → `cli/commands/` (parse args, call operation) + `cli/render/` (print the view).
+- Generic enough for an unrelated project (timestamp formatting, generic file I/O)? → `utils/`.
+
+## Pluggable points
 
 ### Normalizer — pluggable input schema type
 
 ```js
 { normalize(rawSchema) -> EntityTree }
 ```
-Registry: `core/normalizers/index.js`, keyed by `--schema-type` (default `directus`, env `SCHEMA_SNAPSHOT_TYPE`). Only `directus` registered today. **To add one**: write a module exporting `normalize(rawSchema) -> EntityTree` with the same key format, add one entry to the `normalizers` map. No other file changes — `diff.js`, `fsTree.js`, CLI commands never see raw input, only the resulting tree.
+Registry: `core/normalizers/index.js`, keyed by `--schema-type` (default `directus`). Only `directus` registered today. **To add one**: write a module exporting `normalize(rawSchema) -> EntityTree` with the same key format (`core/directus/normalize.js`'s `entityKey()`), add one entry to the map. No other file changes.
 
 ### Parser — pluggable input file format
 
 ```js
 { parse(filePath) -> object }
 ```
-Registry: `core/parsers/index.js`, keyed by `--file-format` (default `json`). Only `json` registered today (`utils/parseJson.js`). **To add one** (e.g. yaml): write `utils/parseYaml.js`, register it. Same shape as the Normalizer registry, deliberately.
+Registry: `core/parsers/index.js`, keyed by `--file-format` (default `json`). Only `json` registered today. **To add one** (e.g. yaml): write `utils/parseYaml.js`, register it.
 
 ### Store — pluggable version-persistence backend
 
-Contract lives in `core/store/store.js` (JSDoc-only checklist, no code) — `list()`, `get(id)`, `getRaw(id)`, `set(tree, message?, raw?)`, `diffVersions(idA, idB)`, `removeLatest()`, `readMeta(key)`/`writeMeta(key, data)` (small sidecar JSON blobs outside version history, e.g. `sync`'s last-synced-hash marker — not reachable via `get()`/`list()`), `reset()`. `GitStore` (`core/store/git.js`) is the only implementation: every version is a full git commit of the tree (not a delta — reads are direct `git show`/`ls-tree`, never a replay chain; writes only touch changed entity files via `writeTreeDelta()`, not a full clear-and-rewrite). `removeLatest()` is a `git revert`, never destructive — every prior version stays readable via `get()`/`list()` afterward. **To add a backend** (e.g. sqlite): implement the `Store` contract, register it in `core/env.js`'s `createStore()` switch, and it must pass `test/store.contract.js`. No `core/operations/*.js` file changes — they only depend on the `Store` interface, injected via `createEnv()`.
-
-`set()` optionally commits the raw, pre-normalize source alongside the normalized tree, as a fixed filename `_source.json` (`GitStore.RAW_SOURCE_FILE` in `git.js`) in the same commit. `getRaw(id)` reads it back with a direct `git show <id>:_source.json` — no reconstruction. `core/operations/get.js`'s `getRawSourceView()` (used by the `get` CLI command) is the only caller; it throws if a version was committed with no raw source (e.g. versions committed before this capability existed). This is distinct from `get(id)`, which returns the normalized `EntityTree`, and from `extract --snapshot`'s `mergeIntoOld()`, which reconstructs a tree by overlaying a delta — `getRaw()` does no reconstruction at all, it's a verbatim byte-for-byte read of what `add` originally received.
-
-### DiffResult — the shape diff() produces
-
-```js
-{ added: string[], removed: string[], modified: {key: string, changes: {path, from, to}[]}[] }
-```
-
-Documented as `@typedef {object} DiffResult` in [core/diff.js](../src/core/diff.js#L44-L49).
-
-Produced by `core/diff.js`'s `diff(treeOld, treeNew)` — generic, no Directus knowledge. It is also consumed by the `extract` operation (`core/operations/extract.js`) to filter the EntityTree down to the matching set of keys depending on the chosen mode, and reused a second time inside `verifyMerge()` to re-diff `treeOld` against a reconstructed snapshot. Equality is `JSON.stringify` comparison (relies on `stripVolatile()` sorting object keys first — NOT a structural equality check). `changedPaths()` only recurses into plain objects; arrays are compared as whole values (one changed array element reports the entire array as changed, not a per-element diff). No rename detection — a remove + add is always two entries, never inferred as one rename (see [roadmap-draft.md](./roadmap-draft.md) stage 2).
+Contract: `core/store/store.js` (JSDoc-only checklist — `list()`, `get(id)`, `getRaw(id)`, `set(tree, message?, raw?)`, `diffVersions(idA, idB)`, `removeLatest()`, `readMeta`/`writeMeta`, `reset()`). `GitStore` (`core/store/git.js`) is the only implementation — see [reference.md](./reference.md#store-contract-summary) for its specifics (revert-based removal, raw-source commit). **To add a backend**: implement the `Store` contract, register it in `core/env.js`'s `createStore()` switch, and pass `test/store.contract.js`. No `core/operations/*.js` changes — they only depend on the injected interface.
 
 ## Composition root: core/env.js
 
 `createEnv({storeDir, storeType, fileFormat}) -> {store, parse}` is the **only** place a concrete `Store` or `Parser` is constructed (`new GitStore(...)` appears nowhere else). Every `cli/commands/*.js` calls it once, then passes `{store, parse}` into the matching `core/operations/*.js` function as injected dependencies. A future UI backend does the same — construct env once, call the same operation functions.
 
-## Subdir format (normalize & extract)
-
-Every non-dry-run `normalize` and `extract` command writes into a fresh subdir of `--out-dir`, named from a template so repeated runs never collide. Controlled by `--subdir-format` (default `{time}_{name}`), overridable via `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`.
-
-- **Placeholders**: 
-  - `{time}` — `YYYYMMDD-HHmmss`.
-  - `{name}` — For `normalize`, the basename of the input file (no extension). For `extract`, computed from the concatenated string `<old>_<new>`.
-- **GOTCHA (for `extract`)**: Because `runSubDir` uses `path.basename` on the combined `<old>_<new>` input string to compute the `{name}` placeholder, if the `<new>` argument is an absolute or relative file path containing `/` separators, any text before the last `/` (which includes the entire `<old>` argument) will be silently stripped out of `{name}` (e.g. `20f5c7f_/path/to/new.json` resolves to a `{name}` of `new`).
-- **Default `{time}_{name}`**: time-first so sorted output reads chronologically across all inputs.
-- **Validation** (`utils/fsTree.js`'s `runSubDir()`), fails fast before any write: must use `{name}` and/or `{time}`; unknown placeholders rejected; rendered result can't contain an empty, `.`, or `..` segment (prevents escaping `--out-dir`).
-
-## Extract dry-run behavior (default dry-run)
-
-By default, `schema-snapshot extract` runs in **dry-run** mode (unlike `normalize` which writes by default). It prints the list of matching keys, the mode, and the subdirectory path where it *would* write.
-
-Passing `--no-dry-run` writes the extracted entities to disk. It reuses `utils/fsTree.js`'s `runSubDir()` and `writeTreeToDir()` to output the exact same directory layout as `normalize` (e.g. `<out-dir>/<subdir>/<kind>/<name>.json`), making the output directly round-trip-able through `schema-snapshot add` or `show --json`.
-
-## Snapshot reconstruction & merge verification (`--snapshot`/`--snapshot-file`)
-
-`--snapshot`/`--snapshot-file` produce a single **full** schema file instead of one-file-per-entity, so it can be applied wholesale (e.g. re-imported into Directus) rather than requiring the caller to reassemble the split files. Requires the normalizer to expose `denormalize(tree) -> rawSchema`; only `directus` supports this today.
-
-- `mergeIntoOld(treeOld, deltaTree, mode)` (`core/operations/extract.js`) does the reconstruction: `added`/`modified` overlay the delta onto `treeOld` (`{...treeOld, ...deltaTree}`); `removed` deletes the delta's keys from a copy of `treeOld`.
-- `verifyMerge(treeOld, merged, result, mode)` re-diffs `treeOld` vs. the reconstruction and asserts the change set matches exactly the extracted mode's key set — no extra file I/O or network call, purely re-using data already in memory. Its result (`{ok, unexpectedAdded, unexpectedRemoved, unexpectedModified, missingKeys}`) is attached to `extractSchemas()`'s return value whenever a merge happened, surfaced by `cli/render/extract.js` as a `✓`/`✗` line and included in `--json` output.
-- **GOTCHA**: `verifyMerge`'s unexpected-key logic assumes extraction is single-mode — for the two non-matching categories, the entire diff result for that category counts as "unexpected," not just entries outside the expected set. This holds today because `expectedKeys` is always empty for non-matching categories; if mixed-mode merges are ever supported, `verifyMerge` needs updating (see its doc comment).
-- **Failure consequence**: dry-run prints the `✗` line but leaves the exit code untouched (nothing was written). A real (`--no-dry-run`) write writes the file first, then throws if verification fails — caught by `cli/index.js`'s central handler, printed as `Error: ...`, exit code `1`. The bad file stays on disk for inspection; nothing is auto-deleted (consistent with this repo's "non-destructive by construction" ethos — the file, once written, is never silently removed).
-
-## Schema-snapshots sync layer
-
-Full rationale/history: [proposal-schema-snapshot-sync.md](./proposal-schema-snapshot-sync.md) (§2 for the original design — note the toggle-chain removal model below postdates it; §5 for other shipped-vs-proposed divergences).
-
-- **`.snapshot/repo`** (`GitStore`) — local-only, gitignored, disposable. Never synced across devices directly. Only used internally for `diffVersions()`/`get()`/`getRaw()` reads and `remove --latest`'s revert.
-- **`schema-snapshots/`** — host-repo-tracked (committed by the project's own git, not gitignored): `meta.json` (append-only event log) + `source/<contentHash>.json` (raw source, content-addressed, immutable once written). This is the sync-able source of truth.
-- **Event log model**: two event types, `add` (`{id, type:'add', hash, at, message?}`) and `remove` (`{id, type:'remove', removes, at}`). `removes` names the *specific* event a `remove` event undoes — an `add` event, or **another `remove` event** (undoing that undo). This makes `remove --latest` safely repeatable any number of times: 1st call removes an add (`removes: <addId>`), 2nd call undoes that removal (`removes: <1st remove's own id>`), 3rd undoes that, etc. — never resolved through to some deeper original id. To determine whether an underlying `add` event is currently active, walk its chain of `remove` events to the root: each link flips the state once, so chain-length parity (even = active, odd = inactive) is the final answer (`eventLog.js`'s `activeAddEvents`).
-- **Commit stamping happens at write time, not just at `sync`**: both `add` (when `--snapshots-dir` is set) and `remove --latest` mint their `meta.json` event id *before* committing and stamp the GitStore commit message with it immediately (`sync: eN (hash)` / `remove: eN (removes eM)`) — so `list`/`resolveRef` see the durable identity the instant the command returns, no separate `sync` run required. (Earlier versions of this layer only stamped commits during `sync`'s replay, leaving a freshly-`add`ed or `remove`d version unresolvable and showing `-` in `list` until `sync` ran — this is fixed; `sync` and live commands now always produce identical stamping.)
-- **`sync`** rebuilds `.snapshot/repo` from `schema-snapshots/meta.json`'s **full event log** (add and remove alike, not just the active set), unconditionally wiping the store dir first and replaying every event in order as a fresh, correctly-stamped commit. Not incremental — every call is a full teardown/rebuild.
-  - **Known limitation**: replaying a `remove` event calls `store.removeLatest()`, which can only revert current HEAD — there's no "revert this specific historical commit" `Store` operation. Safe for every `remove --latest`-produced event (always targets whatever's actually at HEAD by construction). **Not** safe for `remove --hash`/`--id` targeting a non-newest active event (`eventLog.js`'s `appendRemoveEvent` allows this) — `sync` detects the mismatch and throws rather than silently rebuilding wrong history. Fixing this for real needs a remove-this-specific-commit `Store` operation, not a revert of HEAD.
-- **Resolution** (`core/snapshotSync/resolve.js`'s `resolveRef`): `show`/`get`/`diff`/`extract` accept an event id or content hash by default; resolution parses stamped commit messages (`parseSyncMessage()`/`parseRemoveMessage()` in `eventLog.js`) to find the matching `.snapshot/repo` commit.
-- **`--cache-ref`**: explicit opt-in on `show`/`get`/`diff`/`extract` to bypass resolution and use a raw `.snapshot/repo` commit sha directly — never auto-detected (a short content hash and a short git sha are the same hex shape).
-- **`status`**: read-only, compares `contentHash(meta.json)` against `.snapshot/sync-state.json`'s `syncedHash` (written by the last `sync`).
-
-## Configuration
-
-Copy `.env.example` to `.env` to override defaults. All vars optional; explicit CLI flags always win.
-
-| Var | Default | Affects |
-|---|---|---|
-| `SCHEMA_SNAPSHOT_OUT_DIR` | `.snapshot/normalized` | `normalize`/`extract`'s default `--out-dir` |
-| `SCHEMA_SNAPSHOT_TYPE` | `directus` | `normalize`/`diff`/`add`/`remove`/`extract`'s default `--schema-type` |
-| `SCHEMA_SNAPSHOT_SUBDIR_FORMAT` | `{time}_{name}` | `normalize`/`extract`'s default `--subdir-format` |
-| `SCHEMA_SNAPSHOT_STORE_DIR` | `.snapshot/repo` | `diff`/`add`/`list`/`show`/`remove`/`extract`/`sync`/`status`'s default `--store-dir` |
-| `SCHEMA_SNAPSHOT_STORE_TYPE` | `git` | default `--store-type` (only `git` registered) |
-| `SCHEMA_SNAPSHOT_FILE_FORMAT` | `json` | default `--file-format` (only `json` registered) |
-| `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR` | `schema-snapshots` | `add`/`show`/`get`/`diff`/`extract`/`remove`/`sync`/`status`'s default `--snapshots-dir` (see "Schema-snapshots sync layer") |
-
-Loaded once at CLI startup via `src/config.js` (`dotenv`).
-
-## Errors
-
-Missing file, unsupported extension, malformed JSON, unknown `--schema-type`/`--file-format`/`--store-type`, unresolvable version id — all print a clean `Error: ...` message and exit 1 (caught centrally in `cli/index.js`), never a raw stack trace.
-
 ## Design rule
 
 CLI-first, UI-ready. Every feature lands as `core/operations/*.js` + `core/present/*.js` (lib) before `cli/commands/*.js` + `cli/render/*.js` (thin CLI glue) — the lib/CLI boundary is what makes a future Web UI additive instead of a rewrite.
+
+## See also
+
+- [reference.md](./reference.md) — data structures (EntityTree/DiffResult), Store contract detail, subdir format, extract dry-run/snapshot-merge, schema-snapshots sync layer, configuration table, errors.
+- [cli-commands.md](./cli-commands.md) — exact flags per command.
+- [roadmap-draft.md](./roadmap-draft.md) — what's deliberately not built yet.

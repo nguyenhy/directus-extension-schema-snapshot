@@ -1,10 +1,10 @@
-// Loads .env (if present) into process.env. The only file in the codebase
-// that reads process.env directly — everything else takes config as input.
+// Loads env vars into process.env. The only file in the codebase that
+// reads process.env directly — everything else takes config as input.
 //
-// GOTCHA: dotenv resolves its default path against process.cwd(), not this
+// GOTCHA: dotenv resolves a bare filename against process.cwd(), not this
 // file's location or the invoked script's directory. If this package is
 // invoked via a wrapper that changes cwd (e.g. `npm run` sets cwd to the
-// nearest package.json dir), the "obvious" .env sitting next to this
+// nearest package.json dir), the "obvious" env file sitting next to this
 // package can be silently skipped in favor of one higher up the tree — no
 // error, just wrong values loaded. resolveEnvFile() lets that be pinned
 // explicitly instead of relying on cwd.
@@ -13,11 +13,22 @@
 // load, and cli/index.js bakes config.defaultX into option defaults at that
 // same time) — so --env-file can't go through commander normally and is
 // pre-scanned from process.argv here instead.
+const path = require('path');
+const fs = require('fs');
+
+// Own-namespaced default — kept in sync with core/operations/init.js's
+// ENV_FILENAME (not imported from there: config.js must stay a
+// standalone, side-effect-only module loaded before commander parses
+// argv). `init` writes this file so a plain `.env` a host project
+// already has is never touched or shadowed.
+const DEFAULT_ENV_FILENAME = '.env.schema-snapshot';
+
 /**
- * Resolves which .env file to load, checked in order:
+ * Resolves which env file to load, checked in order:
  * 1. `--env-file <path>` / `--env-file=<path>` CLI arg
  * 2. SCHEMA_SNAPSHOT_ENV_FILE environment variable
- * 3. undefined — dotenv falls back to its own default (cwd/.env)
+ * 3. `./.env.schema-snapshot` (cwd) if it exists
+ * 4. `undefined` — dotenv falls back to its own default (cwd/.env)
  * @returns {string | undefined}
  */
 function resolveEnvFile() {
@@ -27,7 +38,12 @@ function resolveEnvFile() {
     if (arg.includes('=')) return arg.slice(arg.indexOf('=') + 1);
     return process.argv[idx + 1];
   }
-  return process.env.SCHEMA_SNAPSHOT_ENV_FILE || undefined;
+  if (process.env.SCHEMA_SNAPSHOT_ENV_FILE) return process.env.SCHEMA_SNAPSHOT_ENV_FILE;
+
+  const namespaced = path.join(process.cwd(), DEFAULT_ENV_FILENAME);
+  if (fs.existsSync(namespaced)) return namespaced;
+
+  return undefined;
 }
 
 require('dotenv').config({ quiet: true, path: resolveEnvFile() });
@@ -47,25 +63,25 @@ function envOr(name, fallback) {
 /**
  * @typedef {object} Config
  * @property {string} defaultOutDir - default --out-dir for `normalize`,
- *   overridable via SCHEMA_SNAPSHOT_OUT_DIR (see .env.example)
+ *   overridable via SCHEMA_SNAPSHOT_OUT_DIR (see .env.schema-snapshot.example)
  * @property {string} defaultSchemaType - default --schema-type for
  *   `normalize`/`diff`, overridable via SCHEMA_SNAPSHOT_TYPE (see
- *   .env.example). Must match a key registered in core/normalizers/index.js.
+ *   .env.schema-snapshot.example). Must match a key registered in core/normalizers/index.js.
  * @property {string} defaultSubdirFormat - default --subdir-format for
  *   `normalize`, overridable via SCHEMA_SNAPSHOT_SUBDIR_FORMAT (see
- *   .env.example). Default "{time}_{name}" sorts chronologically across
+ *   .env.schema-snapshot.example). Default "{time}_{name}" sorts chronologically across
  *   all inputs — see utils/fsTree.js's runSubDir() for placeholder docs.
  * @property {string} defaultStoreDir - where the git-backed version store
- *   lives, overridable via SCHEMA_SNAPSHOT_STORE_DIR (see .env.example).
+ *   lives, overridable via SCHEMA_SNAPSHOT_STORE_DIR (see .env.schema-snapshot.example).
  *   Separate git repo from the project's own — see core/store/git.js.
  * @property {'git'} defaultStoreType - which Store implementation
  *   core/env.js's createEnv() constructs, overridable via
- *   SCHEMA_SNAPSHOT_STORE_TYPE (see .env.example). Must match a case in
+ *   SCHEMA_SNAPSHOT_STORE_TYPE (see .env.schema-snapshot.example). Must match a case in
  *   core/env.js's createStore(). Only "git" exists today; this exists so
  *   a future implementation is a config value away, not a code change.
  * @property {'json'} defaultFileFormat - which Parser core/env.js's
  *   createEnv() constructs, overridable via SCHEMA_SNAPSHOT_FILE_FORMAT
- *   (see .env.example). Must match a key registered in
+ *   (see .env.schema-snapshot.example). Must match a key registered in
  *   core/parsers/index.js. Only "json" exists today, same rationale as
  *   defaultStoreType.
  * @property {string} defaultSnapshotsDir - host-repo-tracked event log +

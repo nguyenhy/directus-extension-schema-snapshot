@@ -104,6 +104,14 @@ function runStoreContractTests(label, makeStore) {
     assert.equal(backward.idNew, idB);
   });
 
+  test(`${label}: init() is safe to call repeatedly and leaves the store usable`, async () => {
+    const store = makeStore();
+    await store.init();
+    await store.init(); // second call, must not throw
+    const { id } = await store.set({ 'collection:a': { collection: 'a' } }, 'first');
+    assert.deepEqual(await store.get(id), { 'collection:a': { collection: 'a' } });
+  });
+
   test(`${label}: reset() wipes all history, store usable immediately after`, async () => {
     const store = makeStore();
     await store.set({ 'collection:a': { collection: 'a' } }, 'first');

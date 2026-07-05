@@ -3,6 +3,15 @@ const platformFs = require('../platform/fs');
 const { buildInitView } = require('../present/init');
 const { AlreadyInitializedError, DirectoryNotEmptyError } = require('../errors');
 const { PACKAGE_ROOT } = require('../../packageRoot');
+const {
+  ENV_VAR_OUT_DIR,
+  ENV_VAR_TYPE,
+  ENV_VAR_SUBDIR_FORMAT,
+  ENV_VAR_STORE_DIR,
+  ENV_VAR_STORE_TYPE,
+  ENV_VAR_FILE_FORMAT,
+  ENV_VAR_SNAPSHOTS_DIR,
+} = require('../envVars');
 
 // Bundled template shipped with this package's own root, not the target dir.
 const ENV_EXAMPLE_SRC = path.join(PACKAGE_ROOT, '.env.schema-snapshot.example');
@@ -32,13 +41,13 @@ const GITIGNORE_LINES = ['.snapshot/'];
 // `init`'s CLI flags are allowed to override at scaffold time. Keep in
 // sync with .env.schema-snapshot.example / src/config.js's envOr() calls.
 const OVERRIDABLE_VARS = [
-  'SCHEMA_SNAPSHOT_OUT_DIR',
-  'SCHEMA_SNAPSHOT_TYPE',
-  'SCHEMA_SNAPSHOT_SUBDIR_FORMAT',
-  'SCHEMA_SNAPSHOT_STORE_DIR',
-  'SCHEMA_SNAPSHOT_STORE_TYPE',
-  'SCHEMA_SNAPSHOT_FILE_FORMAT',
-  'SCHEMA_SNAPSHOT_SNAPSHOTS_DIR',
+  ENV_VAR_OUT_DIR,
+  ENV_VAR_TYPE,
+  ENV_VAR_SUBDIR_FORMAT,
+  ENV_VAR_STORE_DIR,
+  ENV_VAR_STORE_TYPE,
+  ENV_VAR_FILE_FORMAT,
+  ENV_VAR_SNAPSHOTS_DIR,
 ];
 
 /**

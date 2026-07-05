@@ -2,18 +2,27 @@ const path = require('path');
 const { createEnv } = require('../../core/env');
 const { initRepo, assertReadyForInit } = require('../../core/operations/init');
 const { printInitView } = require('../render/init');
+const {
+  ENV_VAR_OUT_DIR,
+  ENV_VAR_TYPE,
+  ENV_VAR_SUBDIR_FORMAT,
+  ENV_VAR_STORE_DIR,
+  ENV_VAR_STORE_TYPE,
+  ENV_VAR_FILE_FORMAT,
+  ENV_VAR_SNAPSHOTS_DIR,
+} = require('../../core/envVars');
 
 // Maps commander option names to the SCHEMA_SNAPSHOT_* var each one
 // overrides in the scaffolded env file — see core/operations/init.js's
 // OVERRIDABLE_VARS for the authoritative var list.
 const OPTION_TO_ENV_VAR = {
-  outDir: 'SCHEMA_SNAPSHOT_OUT_DIR',
-  schemaType: 'SCHEMA_SNAPSHOT_TYPE',
-  subdirFormat: 'SCHEMA_SNAPSHOT_SUBDIR_FORMAT',
-  storeDir: 'SCHEMA_SNAPSHOT_STORE_DIR',
-  storeType: 'SCHEMA_SNAPSHOT_STORE_TYPE',
-  fileFormat: 'SCHEMA_SNAPSHOT_FILE_FORMAT',
-  snapshotsDir: 'SCHEMA_SNAPSHOT_SNAPSHOTS_DIR',
+  outDir: ENV_VAR_OUT_DIR,
+  schemaType: ENV_VAR_TYPE,
+  subdirFormat: ENV_VAR_SUBDIR_FORMAT,
+  storeDir: ENV_VAR_STORE_DIR,
+  storeType: ENV_VAR_STORE_TYPE,
+  fileFormat: ENV_VAR_FILE_FORMAT,
+  snapshotsDir: ENV_VAR_SNAPSHOTS_DIR,
 };
 
 /**

@@ -15,6 +15,16 @@
 // pre-scanned from process.argv here instead.
 const path = require('path');
 const fs = require('fs');
+const {
+  ENV_VAR_ENV_FILE,
+  ENV_VAR_OUT_DIR,
+  ENV_VAR_TYPE,
+  ENV_VAR_SUBDIR_FORMAT,
+  ENV_VAR_STORE_DIR,
+  ENV_VAR_STORE_TYPE,
+  ENV_VAR_FILE_FORMAT,
+  ENV_VAR_SNAPSHOTS_DIR,
+} = require('./core/envVars');
 
 // Own-namespaced default — kept in sync with core/operations/init.js's
 // ENV_FILENAME (not imported from there: config.js must stay a
@@ -38,7 +48,7 @@ function resolveEnvFile() {
     if (arg.includes('=')) return arg.slice(arg.indexOf('=') + 1);
     return process.argv[idx + 1];
   }
-  if (process.env.SCHEMA_SNAPSHOT_ENV_FILE) return process.env.SCHEMA_SNAPSHOT_ENV_FILE;
+  if (process.env[ENV_VAR_ENV_FILE]) return process.env[ENV_VAR_ENV_FILE];
 
   const namespaced = path.join(process.cwd(), DEFAULT_ENV_FILENAME);
   if (fs.existsSync(namespaced)) return namespaced;
@@ -93,13 +103,13 @@ function envOr(name, fallback) {
 
 /** @type {Config} */
 const config = {
-  defaultOutDir: envOr('SCHEMA_SNAPSHOT_OUT_DIR', '.snapshot/normalized'),
-  defaultSchemaType: envOr('SCHEMA_SNAPSHOT_TYPE', 'directus'),
-  defaultSubdirFormat: envOr('SCHEMA_SNAPSHOT_SUBDIR_FORMAT', '{time}_{name}'),
-  defaultStoreDir: envOr('SCHEMA_SNAPSHOT_STORE_DIR', '.snapshot/repo'),
-  defaultStoreType: envOr('SCHEMA_SNAPSHOT_STORE_TYPE', 'git'),
-  defaultFileFormat: envOr('SCHEMA_SNAPSHOT_FILE_FORMAT', 'json'),
-  defaultSnapshotsDir: envOr('SCHEMA_SNAPSHOT_SNAPSHOTS_DIR', 'schema-snapshots'),
+  defaultOutDir: envOr(ENV_VAR_OUT_DIR, '.snapshot/normalized'),
+  defaultSchemaType: envOr(ENV_VAR_TYPE, 'directus'),
+  defaultSubdirFormat: envOr(ENV_VAR_SUBDIR_FORMAT, '{time}_{name}'),
+  defaultStoreDir: envOr(ENV_VAR_STORE_DIR, '.snapshot/repo'),
+  defaultStoreType: envOr(ENV_VAR_STORE_TYPE, 'git'),
+  defaultFileFormat: envOr(ENV_VAR_FILE_FORMAT, 'json'),
+  defaultSnapshotsDir: envOr(ENV_VAR_SNAPSHOTS_DIR, 'schema-snapshots'),
 };
 
 module.exports = config;

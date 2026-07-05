@@ -20,7 +20,8 @@
   },
   "files": [
     "src",
-    "types"
+    "types",
+    ".env.schema-snapshot.example"
   ],
   "types": "./types/index.d.ts",
   "engines": {

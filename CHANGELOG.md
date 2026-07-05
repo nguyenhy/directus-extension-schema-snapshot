@@ -1,3 +1,23 @@
+# [1.1.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.4...v1.1.0) (2026-07-05)
+
+
+### Bug Fixes
+
+* allow specify to use `.env` at diferent location ([cacf9f4](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/cacf9f4e395b34a066141d9831fce433a01dc35f))
+* missing doc about `--env-file` customization ([78de48c](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/78de48c899895220338eaa9d2703274645d3cf9f))
+* missing doc about `meta.json` ([1f5a3dd](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/1f5a3dd879f1506d1007daec9f369dda818b3650))
+* read collection/field identity from entity value, not tree key ([b8c3174](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/b8c3174ea4657a2ea67c9f1c9eb1f82c82aca2dd))
+* satisfy tsc type checks for new hash-keyed entity map ([329a70b](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/329a70b9d1c7a3e205d92b44e7fb7a4a23dda205))
+* treat empty string as purpose value instead of use fallback value ([1a0b546](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/1a0b54699d89fbe72bff28e50c93981b689fc98c))
+
+
+### Features
+
+* add package tags ([6314a7c](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/6314a7c32eb82de1f4ac18a17bff9cab005fa6dc))
+* link error with env source ([8317ca7](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/8317ca75c85253a0ce26e05f8da2882606783a3a))
+* update package description ([deb5834](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/deb583465f5bb23370eb1d20e496878f77f2ea7b))
+* write map.json sidecar mapping index keys back to collection/field ([038fd0a](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/038fd0a9834616c57503d5878e99537d53d52117))
+
 ## [1.0.4](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.3...v1.0.4) (2026-07-04)
 
 

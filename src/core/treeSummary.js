@@ -3,32 +3,38 @@
  * fields/relations breakdown. Shared by core/operations/normalize.js's
  * buildMeta() and core/operations/extract.js's buildExtractMeta() — both
  * built the identical run-summary shape, so it lives here once.
- * GOTCHA: parses tree keys assuming core/directus/normalize.js's entityKey()
- * format "kind:collection.name" — silently mis-groups entries if that
- * format ever changes (no error, just wrong/missing entries in the summary).
+ * Reads collection/field identity from each entity's own value (e.g.
+ * entity.collection), not from the tree key — keys are index-based
+ * ("kind:0") since core/directus/normalize.js's entityKey() change, so the
+ * name is only ever available on the value.
  * @param {import('./normalizers').EntityTree} tree
- * @returns {{counts: {collections: number, fields: number, relations: number}, collections: Object.<string, {fields: string[], relations: string[]}>}}
+ * @returns {{counts: {collections: number, fields: number, systemfields: number, relations: number}, collections: Object.<string, {fields: string[], systemfields: string[], relations: string[]}>}}
  */
 function buildTreeSummary(tree) {
-  const counts = { collections: 0, fields: 0, relations: 0 };
-  /** @type {Object.<string, {fields: string[], relations: string[]}>} */
+  const counts = { collections: 0, fields: 0, systemfields: 0, relations: 0 };
+  /** @type {Object.<string, {fields: string[], systemfields: string[], relations: string[]}>} */
   const collections = {};
 
+  const ensure = (name) => {
+    collections[name] = collections[name] || { fields: [], systemfields: [], relations: [] };
+    return collections[name];
+  };
+
   for (const key of Object.keys(tree)) {
-    const [kind, rest] = key.split(':');
+    const kind = key.slice(0, key.indexOf(':'));
+    const entity = tree[key];
     if (kind === 'collection') {
       counts.collections++;
-      collections[rest] = collections[rest] || { fields: [], relations: [] };
+      ensure(entity.collection);
     } else if (kind === 'field') {
       counts.fields++;
-      const [collection, field] = rest.split('.');
-      collections[collection] = collections[collection] || { fields: [], relations: [] };
-      collections[collection].fields.push(field);
+      ensure(entity.collection).fields.push(entity.field);
+    } else if (kind === 'systemfield') {
+      counts.systemfields++;
+      ensure(entity.collection).systemfields.push(entity.field);
     } else if (kind === 'relation') {
       counts.relations++;
-      const [collection, field] = rest.split('.');
-      collections[collection] = collections[collection] || { fields: [], relations: [] };
-      collections[collection].relations.push(field);
+      ensure(entity.collection).relations.push(entity.field);
     }
   }
 

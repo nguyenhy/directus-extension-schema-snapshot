@@ -1,14 +1,18 @@
 # schema-snapshot
 
+[![npm](https://img.shields.io/npm/v/schema-snapshot)](https://www.npmjs.com/package/schema-snapshot)
+[![license](https://img.shields.io/npm/l/schema-snapshot)](./LICENSE)
+[![node](https://img.shields.io/node/v/schema-snapshot)](./package.json)
+
 > **Pre-1.0, unstable.** Breaking changes may land at any time without notice. Pin an exact version if you depend on this.
 
 ## What it is
 
-A small toolset that turns a raw JSON schema snapshot (e.g. Directus schema export) into a git-diffable, AI-readable format, then computes structured diffs between two versions (added / removed / modified).
+Version control for schema, with change extraction built in: snapshot a schema export, diff two versions, and pull out exactly what changed. Where `git diff` on a raw export shows you a wall of reordered JSON, this shows you exactly which fields changed and how — one entity per file, so a large schema is searchable/queryable per-entity instead of one giant blob (grep-able by a human, or scoped-context-readable by an AI agent without loading the whole schema).
 
 ## What it's not
 
-- Not a database migration framework (no rollback engine, no query builder) — planned migration-apply layer will call existing SDK operations (e.g. Directus SDK), not run raw SQL.
+- Not a database migration framework (no rollback engine, no query builder, no apply step) — nothing here executes a change against a live schema today.
 - Not a live schema sync tool — works on snapshots you export, not a continuous watcher.
 - Not a data migration tool — does not infer or write backfill logic (e.g. copying `sku` → `sku_id`). Backfill stays manual, deliberately — only a human knows the business meaning of a rename/reshape.
 - Not Directus-only in concept, but not there yet — diffing is generic, normalizing is currently Directus-specific. A generic-JSON normalizer is future work (see [Roadmap](./docs/roadmap-draft.md)).
@@ -21,7 +25,8 @@ Schema snapshots as one giant JSON blob are hard to diff, hard to review in a PR
 
 - **Reviewable schema PRs** — export schema before/after a change, `add` both, `diff` them, get a per-field added/removed/modified list instead of a raw JSON diff.
 - **Schema history** — `add` a version each time you export, `list`/`show` to see what changed and when, without a live DB connection.
-- **Partial handoff** — `extract` just the added/removed/modified entities between two versions (e.g. to hand a delta to another environment) instead of shipping the full schema.
+- **Incremental migration input** — `extract --mode added` (or `removed`/`modified`) between two versions gives you just the delta to feed into your own migration/apply step. This tool stops at "here's what changed"; applying it is on you.
+- **Quick identify/query** — one file per entity (`kind/name.json`) means you can grep/search/`show` a single field's history instead of diffing one giant JSON blob — and an AI agent can read just the entities relevant to a question instead of the whole schema.
 
 ## Quickstart
 
@@ -51,6 +56,18 @@ npx schema-snapshot diff <id1> <id2>                            # structured dif
 npx schema-snapshot extract <id1> <id2> --mode added            # pull out just the added/removed/modified entities
 ```
 
+**Before/after** — `fixtures/v1.json` → `fixtures/v2.json` changes one field's type, drops one field, adds one field. `git diff` on the raw export buries that in reordered JSON; this tool's `diff` output states it directly:
+
+```json
+{
+  "added": ["field:orders.tracking_number"],
+  "removed": ["field:orders.legacy_flag"],
+  "modified": [
+    { "key": "field:orders.status", "changes": [{ "path": "type", "from": "string", "to": "enum" }] }
+  ]
+}
+```
+
 **3. What you get:**
 
 - A per-entity `added`/`removed`/`modified` diff, not a raw JSON diff — a normalized view of the source that makes changes legible to a human or an AI agent.
@@ -78,7 +95,7 @@ Structured this way on purpose — new backends/formats/sources are additive, no
 
 **Implemented:** `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `extract`, `sync`, `status` — git-backed version storage (every version = one commit), host-repo-syncable event log (`schema-snapshots/`), CLI only.
 
-**Not yet built:** rename detection, migrate-plan/apply, rollback plan, SQLite index, Web UI. See [Roadmap](./docs/roadmap-draft.md) for the ordered list — do not assume any of that exists in the code today.
+**Not built, unscheduled ideas:** rename detection, migrate-plan/apply, rollback plan, SQLite index, Web UI. Listed in [Roadmap](./docs/roadmap-draft.md) as possible future stages, not commitments — none of it exists in the code today, and none has a target date.
 
 ## Versioning
 

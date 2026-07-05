@@ -28,6 +28,40 @@ const ALREADY_INIT_MARKERS = ['schema-snapshots', '.snapshot'];
 
 const GITIGNORE_LINES = ['.snapshot/'];
 
+// Every SCHEMA_SNAPSHOT_* var the template declares uncommented — the set
+// `init`'s CLI flags are allowed to override at scaffold time. Keep in
+// sync with .env.schema-snapshot.example / src/config.js's envOr() calls.
+const OVERRIDABLE_VARS = [
+  'SCHEMA_SNAPSHOT_OUT_DIR',
+  'SCHEMA_SNAPSHOT_TYPE',
+  'SCHEMA_SNAPSHOT_SUBDIR_FORMAT',
+  'SCHEMA_SNAPSHOT_STORE_DIR',
+  'SCHEMA_SNAPSHOT_STORE_TYPE',
+  'SCHEMA_SNAPSHOT_FILE_FORMAT',
+  'SCHEMA_SNAPSHOT_SNAPSHOTS_DIR',
+];
+
+/**
+ * Applies `{VAR: value}` overrides to the template's `VAR=...` lines,
+ * leaving comments and untouched vars as-is. Only vars in
+ * OVERRIDABLE_VARS are ever looked at — anything else in `overrides` is
+ * silently ignored (defensive, in case a caller passes an unrelated
+ * options object through instead of a pre-filtered one).
+ * @param {string} templateContent
+ * @param {Object<string, string>} overrides
+ * @returns {string}
+ */
+function renderEnvContent(templateContent, overrides) {
+  let content = templateContent;
+  for (const key of OVERRIDABLE_VARS) {
+    const value = overrides[key];
+    if (value === undefined) continue;
+    const line = new RegExp(`^${key}=.*$`, 'm');
+    content = content.replace(line, `${key}=${value}`);
+  }
+  return content;
+}
+
 /**
  * Finds where `.env.schema-snapshot` should live for a target `dir`: the nearest
  * ancestor (including `dir` itself) containing a `package.json`, since
@@ -89,24 +123,29 @@ function assertReadyForInit(dir) {
  * touches a host project's real `.env`.
  *
  * If `.env.schema-snapshot` already exists at the resolved env root,
- * it's left alone (not overwritten) — most likely a prior `init` run.
+ * it's left alone (not overwritten, `envOverrides` ignored too) — most
+ * likely a prior `init` run; re-run against an empty dir to apply new
+ * overrides instead.
  *
  * Caller must call `assertReadyForInit(dir)` before constructing `store`
  * (see that function's doc) — this function assumes that already passed
  * and does not re-check, since by the time `store` exists here the
  * constructor's mkdir side effect has already happened.
- * @param {{dir: string, store: import('../store/store').Store}} params
+ * @param {{dir: string, store: import('../store/store').Store, envOverrides?: Object<string, string>}} params
  *   `store` is injected the same way every other core/operations/*.js
  *   takes it — constructed once by createEnv(), never `new GitStore()`
- *   here.
+ *   here. `envOverrides` — `{SCHEMA_SNAPSHOT_X: value}` pairs (see
+ *   OVERRIDABLE_VARS) written into the freshly-scaffolded env file in
+ *   place of the template's defaults; unrecognized keys are ignored.
  * @returns {Promise<ReturnType<typeof buildInitView>>}
  */
-async function initRepo({ dir, store }) {
+async function initRepo({ dir, store, envOverrides = {} }) {
   const envRoot = findEnvRoot(dir);
   const envPath = path.join(envRoot, ENV_FILENAME);
   const envAlreadyExisted = platformFs.exists(envPath);
   if (!envAlreadyExisted) {
-    platformFs.copyFile(ENV_EXAMPLE_SRC, envPath);
+    const template = platformFs.readFile(ENV_EXAMPLE_SRC);
+    platformFs.writeFile(envPath, renderEnvContent(template, envOverrides));
   }
 
   const gitignorePath = path.join(dir, '.gitignore');
@@ -122,4 +161,4 @@ async function initRepo({ dir, store }) {
   });
 }
 
-module.exports = { initRepo, assertReadyForInit, findEnvRoot };
+module.exports = { initRepo, assertReadyForInit, findEnvRoot, renderEnvContent, OVERRIDABLE_VARS };

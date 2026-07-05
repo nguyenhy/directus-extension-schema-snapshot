@@ -76,19 +76,27 @@ One-command onboarding: copies the bundled `.env.schema-snapshot.example` templa
 
 ### OPTIONS
 
-| flag                   | meaning                                                  |
-| ----------------------- | --------------------------------------------------------- |
-| `[dir]`                | target directory, default `.`                              |
-| `--store-dir <dir>`    | store cache dir, created inside `dir` (see Global options) |
-| `--store-type <type>`  | see Global options                                          |
-| `--json`               | output the init view as JSON (for UI / programmatic use)   |
+Every flag below is written into the scaffolded `.env.schema-snapshot` as the matching `SCHEMA_SNAPSHOT_*` var (see Global options for what each var controls) — using either the flag's explicit value or its default, so the written file always matches what this run actually used. Ignored (with the file left untouched) if `.env.schema-snapshot` already existed at the resolved env root.
+
+| flag                       | env var written                     |
+| --------------------------- | ------------------------------------ |
+| `[dir]`                    | target directory, default `.` — not written, just where things go |
+| `--out-dir <dir>`          | `SCHEMA_SNAPSHOT_OUT_DIR`            |
+| `--schema-type <type>`     | `SCHEMA_SNAPSHOT_TYPE`               |
+| `--subdir-format <format>` | `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`      |
+| `--store-dir <dir>`        | `SCHEMA_SNAPSHOT_STORE_DIR` (also the local store cache dir, created inside `dir`) |
+| `--store-type <type>`      | `SCHEMA_SNAPSHOT_STORE_TYPE`         |
+| `--file-format <format>`   | `SCHEMA_SNAPSHOT_FILE_FORMAT`        |
+| `--snapshots-dir <dir>`    | `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR`      |
+| `--json`                   | output the init view as JSON (for UI / programmatic use) — not written |
 
 ### EXAMPLES
 
 ```bash
-schema-snapshot init                 # scaffold cwd
-schema-snapshot init ./my-project    # scaffold a specific dir
-schema-snapshot init . --json        # machine-readable result
+schema-snapshot init                                  # scaffold cwd with all defaults
+schema-snapshot init ./my-project                     # scaffold a specific dir
+schema-snapshot init --schema-type directus --out-dir ./out   # override vars written into .env.schema-snapshot
+schema-snapshot init . --json                         # machine-readable result
 ```
 
 ### SEE ALSO

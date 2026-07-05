@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test, after } = require('node:test');
 const { GitStore } = require('../src/core/store/git');
-const { initRepo, assertReadyForInit, findEnvRoot } = require('../src/core/operations/init');
+const { initRepo, assertReadyForInit, findEnvRoot, renderEnvContent } = require('../src/core/operations/init');
 const { DirectoryNotEmptyError } = require('../src/core/errors');
 
 const tmpDirs = [];
@@ -86,6 +86,32 @@ test('findEnvRoot walks up to the nearest package.json, falls back to dir itself
 
   const standalone = freshDir();
   assert.equal(findEnvRoot(standalone), path.resolve(standalone));
+});
+
+test('renderEnvContent overrides only the given vars, leaves the rest and comments untouched', () => {
+  const template = ['# comment', 'SCHEMA_SNAPSHOT_OUT_DIR=.snapshot/normalized', 'SCHEMA_SNAPSHOT_TYPE=directus', ''].join('\n');
+  const rendered = renderEnvContent(template, { SCHEMA_SNAPSHOT_TYPE: 'custom' });
+
+  assert.match(rendered, /^# comment$/m);
+  assert.match(rendered, /^SCHEMA_SNAPSHOT_OUT_DIR=\.snapshot\/normalized$/m);
+  assert.match(rendered, /^SCHEMA_SNAPSHOT_TYPE=custom$/m);
+});
+
+test('renderEnvContent ignores unrecognized override keys', () => {
+  const template = 'SCHEMA_SNAPSHOT_TYPE=directus\n';
+  const rendered = renderEnvContent(template, { NOT_A_REAL_VAR: 'x' });
+  assert.equal(rendered, template);
+});
+
+test('initRepo writes envOverrides into a freshly scaffolded env file', async () => {
+  const dir = freshDir();
+  assertReadyForInit(dir);
+  const store = new GitStore(path.join(dir, '.snapshot', 'repo'));
+
+  await initRepo({ dir, store, envOverrides: { SCHEMA_SNAPSHOT_TYPE: 'custom-type' } });
+
+  const content = fs.readFileSync(path.join(dir, '.env.schema-snapshot'), 'utf8');
+  assert.match(content, /^SCHEMA_SNAPSHOT_TYPE=custom-type$/m);
 });
 
 test('assertReadyForInit ignores OS junk files, and a pre-existing .env, when checking emptiness', () => {

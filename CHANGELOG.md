@@ -1,3 +1,14 @@
+# [1.2.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.1.0...v1.2.0) (2026-07-05)
+
+
+### Features
+
+* add init command to scaffold a target dir for first use ([e51753c](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/e51753c9f63c5903d3c67e7cb3d2c695a4f45275))
+* add init/directory-not-empty errors and Store.init contract ([95edc7b](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/95edc7b28af6526a4d147c5c3023a12e875dc5e5))
+* add packageRoot helper to avoid brittle __dirname climbing ([99a885e](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/99a885e7b5b20f05be05fc584e1041933554a9a3))
+* allow to override default env value from `init` command ([de0a36d](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/de0a36d31b9b37e94414db41e9a065adcc59164d))
+* resolve .env.schema-snapshot before falling back to .env ([4598eec](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/4598eecc07c10774f6e63a16e6b239b3153a5f91))
+
 # [1.1.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.0.4...v1.1.0) (2026-07-05)
 
 

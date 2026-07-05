@@ -40,7 +40,7 @@ Or add as a dependency:
 
 ```
 npm install schema-snapshot
-cp .env.example .env   # optional config override, see docs/architecture.md
+npx schema-snapshot init   # scaffolds .env.schema-snapshot + local store, see docs/cli-commands.md#init
 ```
 
 (From a cloned repo without `npm link`, swap `npx schema-snapshot` → `node src/cli/index.js`.)
@@ -77,7 +77,7 @@ npx schema-snapshot extract <id1> <id2> --mode added            # pull out just 
 
 ## Commands
 
-`normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `sync`, `status`, `extract` — one line each in [docs/cli-commands.md](./docs/cli-commands.md), full flags and examples there. `--help` on any command also works: `npx schema-snapshot <command> --help`.
+`init`, `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `sync`, `status`, `extract` — one line each in [docs/cli-commands.md](./docs/cli-commands.md), full flags and examples there. `--help` on any command also works: `npx schema-snapshot <command> --help`.
 
 ## Customizable
 

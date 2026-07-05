@@ -5,7 +5,10 @@ All commands: `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `sync
 ```bash
 schema-snapshot <command> --help    # authoritative flag list, always up to date
 schema-snapshot --version
+schema-snapshot --env-file <path> <command> ...   # explicit .env path, before default cwd/.env lookup
 ```
+
+**`--env-file <path>`** (env `SCHEMA_SNAPSHOT_ENV_FILE`) — top-level option, not per-command. Pins which `.env` file loads, since dotenv otherwise resolves against `process.cwd()`, which can silently differ from this package's own directory when invoked via a wrapper (e.g. `npm run`). See [reference.md#configuration](./reference.md#configuration).
 
 ## Global options
 

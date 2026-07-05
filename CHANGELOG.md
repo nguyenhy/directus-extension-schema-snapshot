@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.2.0...v1.2.1) (2026-07-05)
+
+
+### Bug Fixes
+
+* add example file to the bundle ([112217a](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/112217a34af267a6454af7beba18642ee078129b))
+
 # [1.2.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.1.0...v1.2.0) (2026-07-05)
 
 

@@ -37,10 +37,11 @@ test('buildExtractMeta: builds correct metadata summary', () => {
   assert.equal(meta.mode, 'added');
   assert.ok(meta.timestamp);
   assert.ok(meta.toolVersion);
-  assert.deepEqual(meta.counts, { collections: 1, fields: 1, relations: 1 });
+  assert.deepEqual(meta.counts, { collections: 1, fields: 1, systemfields: 0, relations: 1 });
   assert.deepEqual(meta.collections, {
     orders: {
       fields: ['status'],
+      systemfields: [],
       relations: ['customer'],
     },
   });
@@ -65,7 +66,8 @@ test('extractSchemas: dryRun with snapshot=true returns the snapshot and metadat
 
   assert.equal(result.dryRun, true);
   assert.equal(result.isSnapshot, true);
-  assert.deepEqual(result.keys, ['field:orders.tracking_number']);
+  assert.equal(result.keys.length, 1);
+  assert.match(result.keys[0], /^field:/);
   // snapshot is the full reconstructed schema: old entities + the added one
   assert.deepEqual(result.snapshot.data.collections, [{ collection: 'orders', meta: { note: 'orders table' } }]);
   assert.deepEqual(result.snapshot.data.fields, [
@@ -208,7 +210,10 @@ test('extractSchemas: no-dry-run default (no snapshot options) writes split file
   const targetSubdir = path.join(outDir, 'v2_split-run');
 
   assert.ok(fs.existsSync(path.join(targetSubdir, 'meta.json')));
-  assert.ok(fs.existsSync(path.join(targetSubdir, 'field/orders.tracking_number.json')));
+  const fieldFiles = fs.readdirSync(path.join(targetSubdir, 'field'));
+  assert.equal(fieldFiles.length, 1);
+  const fieldContent = JSON.parse(fs.readFileSync(path.join(targetSubdir, 'field', fieldFiles[0]), 'utf8'));
+  assert.equal(fieldContent.field, 'tracking_number');
 
   const metaContent = JSON.parse(fs.readFileSync(path.join(targetSubdir, 'meta.json'), 'utf8'));
   assert.equal(metaContent.old, oldSchema);

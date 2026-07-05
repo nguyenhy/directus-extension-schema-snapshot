@@ -1,7 +1,15 @@
 {
   "name": "schema-snapshot",
   "version": "1.0.4",
-  "description": "Directus schema snapshot normalize + diff toolset",
+  "description": "Version-control schema exports (Directus) as diffable, per-entity snapshots — snapshot, diff, and extract exactly what changed",
+  "keywords": [
+    "directus",
+    "schema",
+    "schema-diff",
+    "schema-snapshot",
+    "schema-versioning",
+    "cli"
+  ],
   "type": "commonjs",
   "bin": {
     "schema-snapshot": "src/cli/index.js"

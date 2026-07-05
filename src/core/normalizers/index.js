@@ -40,7 +40,7 @@ const normalizers = {
 function getNormalizer(type) {
   const normalizer = normalizers[type];
   if (!normalizer) {
-    throw new UnknownSchemaTypeError(`Unknown schema type "${type}". Available: ${Object.keys(normalizers).join(', ')}`);
+    throw new UnknownSchemaTypeError(`Unknown schema type "${type}" (from --schema-type or SCHEMA_SNAPSHOT_TYPE). Available: ${Object.keys(normalizers).join(', ')}`);
   }
   return normalizer;
 }

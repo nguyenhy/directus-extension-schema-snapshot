@@ -21,7 +21,8 @@ const program = new Command();
 program
   .name('schema-snapshot')
   .description('Normalize + diff Directus schema snapshots')
-  .version(pkg.version);
+  .version(pkg.version)
+  .option('--env-file <path>', 'path to .env file (default: SCHEMA_SNAPSHOT_ENV_FILE, then cwd/.env — resolved before this option parses, see config.js)');
 
 program
   .command('normalize')

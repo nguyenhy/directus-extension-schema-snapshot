@@ -188,7 +188,9 @@ class GitStore {
         const sha = line.slice(0, tabIdx).split(' ')[2];
         return { filePath, sha };
       })
-      .filter((e) => e.filePath.endsWith('.json') && e.filePath !== RAW_SOURCE_FILE);
+      // Entity files always live in a "<kind>/<index>.json" subpath; anything
+      // at repo root (RAW_SOURCE_FILE, map.json) is a sidecar, not an entity.
+      .filter((e) => e.filePath.endsWith('.json') && e.filePath.includes('/') && e.filePath !== RAW_SOURCE_FILE);
 
     const contents = await batchCatFile(this.dir, entries.map((e) => e.sha));
 

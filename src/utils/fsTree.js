@@ -47,11 +47,38 @@ function runSubDir(outDir, inputPath, format) {
 }
 
 /**
- * Writes a normalize()-output tree to disk as one file per entity.
- * GOTCHA: relies on entityKey()'s "kind:name" format (see core/directus/normalize.js)
+ * Builds the "map.json" sidecar: entity key -> its identifying fields
+ * (collection/field), pulled from the entity's own value. Keys are
+ * content-hash-based ("field:9a01de...") since core/directus/normalize.js's
+ * entityKey() change, so this file is what makes a written tree
+ * human-navigable without needing to open every entity file to find
+ * "which one is orders.status".
+ * @param {import('../core/normalizers').EntityTree} tree
+ * @returns {Object.<string, {collection?: string, field?: string}>}
+ */
+function buildKeyMap(tree) {
+  /** @type {Object.<string, {collection?: string, field?: string}>} */
+  const map = {};
+  for (const key of Object.keys(tree)) {
+    const value = tree[key];
+    if (value && typeof value === 'object' && !Array.isArray(value) && ('collection' in value || 'field' in value)) {
+      const entry = {};
+      if ('collection' in value) entry.collection = value.collection;
+      if ('field' in value) entry.field = value.field;
+      map[key] = entry;
+    }
+  }
+  return map;
+}
+
+/**
+ * Writes a normalize()-output tree to disk as one file per entity, plus a
+ * map.json sidecar (see buildKeyMap()).
+ * GOTCHA: relies on entityKey()'s "kind:hash" format (see core/directus/normalize.js)
  * — splits each key on ":" to derive the subdirectory ("kind") and filename
- * ("name"). If entityKey()'s format changes, this silently writes to wrong
- * paths rather than erroring.
+ * ("hash"). The hash half is a content hash of the entity's identity,
+ * never the raw attacker-controlled field content, so it's always a safe
+ * fixed-charset string to use directly as a path segment.
  * @param {import('../core/normalizers').EntityTree} tree - normalize() output
  * @param {string} dir - target directory (created if missing)
  */
@@ -62,6 +89,10 @@ function writeTreeToDir(tree, dir) {
     fs.mkdir(kindDir);
     const file = path.join(kindDir, `${name}.json`);
     fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
+  }
+  const map = buildKeyMap(tree);
+  if (Object.keys(map).length > 0) {
+    fs.writeFile(path.join(dir, 'map.json'), JSON.stringify(map, null, 2) + '\n');
   }
 }
 
@@ -121,6 +152,20 @@ function writeTreeDelta(tree, previousTree, dir) {
     const file = path.join(kindDir, `${name}.json`);
     fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
   }
+
+  const mapPath = path.join(dir, 'map.json');
+  const existingMap = fs.exists(mapPath) ? JSON.parse(fs.readFile(mapPath)) : {};
+  const newMap = buildKeyMap(tree);
+  for (const key of oldKeys) {
+    if (!newKeys.has(key)) delete existingMap[key];
+  }
+  Object.assign(existingMap, newMap);
+
+  if (Object.keys(existingMap).length > 0) {
+    fs.writeFile(mapPath, JSON.stringify(existingMap, null, 2) + '\n');
+  } else if (fs.exists(mapPath)) {
+    fs.remove(mapPath, { force: true });
+  }
 }
 
-module.exports = { runSubDir, writeTreeToDir, writeTreeDelta, readTreeFromDir, SUBDIR_PLACEHOLDERS };
+module.exports = { runSubDir, writeTreeToDir, writeTreeDelta, readTreeFromDir, buildKeyMap, SUBDIR_PLACEHOLDERS };

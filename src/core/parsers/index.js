@@ -26,7 +26,7 @@ const parsers = {
 function getParser(format) {
   const parser = parsers[format];
   if (!parser) {
-    throw new UnknownFileFormatError(`Unknown file format "${format}". Available: ${Object.keys(parsers).join(', ')}`);
+    throw new UnknownFileFormatError(`Unknown file format "${format}" (from --file-format or SCHEMA_SNAPSHOT_FILE_FORMAT). Available: ${Object.keys(parsers).join(', ')}`);
   }
   return parser;
 }

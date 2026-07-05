@@ -4,6 +4,7 @@
 // "Directory structure" section for the split rule.
 const { Command } = require('commander');
 const config = require('../config');
+const { cmdInit } = require('./commands/init');
 const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
@@ -23,6 +24,15 @@ program
   .description('Normalize + diff Directus schema snapshots')
   .version(pkg.version)
   .option('--env-file <path>', 'path to .env file (default: SCHEMA_SNAPSHOT_ENV_FILE, then cwd/.env — resolved before this option parses, see config.js)');
+
+program
+  .command('init')
+  .description('set up a target directory for first use: copies .env, writes .gitignore, initializes the local store — reject if dir already initialized or non-empty')
+  .argument('[dir]', 'target directory to initialize', '.')
+  .option('--store-dir <dir>', 'store cache dir, created inside <dir>', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)
+  .option('--json', 'output the init view as JSON (for UI / programmatic use)')
+  .action(cmdInit);
 
 program
   .command('normalize')

@@ -15,19 +15,19 @@
 
 ### What
 
-flat map `{"kind:name": entity, ...}` — the shape every operation passes around.
+flat map `{"kind:hash": entity, ...}` — the shape every operation passes around. `hash` is a content hash of the entity's identity fields (`collection`, or `collection`+`field`), not the raw name.
 
 ### Where
 
-`core/directus/normalize.js`'s `entityKey()`.
+`core/directus/normalize.js`'s `entityKey()`/`entityIdentity()`.
 
 ### Why
 
-flat + string-keyed so any two versions are diffable by plain key comparison, no tree-walk needed.
+hashing identity (not raw name) keeps the key a safe fixed-charset string regardless of attacker-controlled `collection`/`field` content, while still mapping the same entity to the same key across versions (so add/remove/modified detection in `diff.js` still works by identity).
 
 ### Gotcha
 
-the key is string-split, not parsed via a shared helper — `fsTree.js` and `buildMeta()` both do their own `.split(':')`. Changing the format breaks them silently, no compile error.
+the key is still string-split on `:`, not parsed via a shared helper — `fsTree.js`, `treeSummary.js`, and `present/show.js` all do their own key handling. Since the format switched to a hash, collection/field identity is no longer recoverable from the key at all — those files now read it off the entity's own value (`entity.collection`/`entity.field`) instead. Changing `entityKey()`'s shape again breaks all of them silently, no compile error. Also see `utils/fsTree.js`'s `map.json` sidecar below — it exists specifically because the key itself no longer reveals which entity it is.
 
 ## Diff semantics traps
 
@@ -100,6 +100,24 @@ exists so a caller can trust a reconstructed full-schema file wasn't silently co
 ### Gotcha
 
 `verifyMerge`'s unexpected-key logic assumes single-mode extraction — for non-matching categories, the _entire_ diff result counts as unexpected, not just entries outside the expected set. On failure, a real write still leaves the bad file on disk (nothing auto-deleted); only the exit code (1) signals it.
+
+## map.json sidecar
+
+### What
+
+`<out-dir>/<subdir>/map.json` — written alongside every `normalize`/`extract` output tree. Maps each entity key back to its `collection`/`field`.
+
+### Where
+
+`utils/fsTree.js`'s `buildKeyMap()`, called from `writeTreeToDir()`/`writeTreeDelta()`.
+
+### Why
+
+`entityKey()` used to build the on-disk filename directly from raw `collection`/`field` values (e.g. `field/orders.status.json`) — but those values come straight from the input schema file, attacker-controlled. A crafted `collection` like `../../../etc/passwd` would escape `--out-dir` as a path. Hashing the identity instead (e.g. `field/9a01de....json`) closes that off — the filename is always a fixed-charset hash, never raw input. Trade-off: the key no longer reveals which entity it is by itself, so `map.json` exists to restore that — human-navigable filenames without reintroducing the path-injection risk.
+
+### Gotcha
+
+only entities whose value has a `collection` or `field` property are included — `meta:*` scalar entries (`version`/`directus`/`vendor`) are skipped. On a delta write (`writeTreeDelta()`), stale keys are pruned from the existing `map.json` and the file is deleted entirely if the merge leaves it empty.
 
 ## Sync layer — why two storage locations
 

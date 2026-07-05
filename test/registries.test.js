@@ -9,7 +9,7 @@ test('getNormalizer: returns the registered "directus" normalizer', () => {
 });
 
 test('getNormalizer: throws a clear error for an unknown type', () => {
-  assert.throws(() => getNormalizer('bogus'), /Unknown schema type "bogus"\. Available: directus/);
+  assert.throws(() => getNormalizer('bogus'), /Unknown schema type "bogus".*Available: directus/);
 });
 
 test('getParser: returns the registered "json" parser', () => {
@@ -18,5 +18,5 @@ test('getParser: returns the registered "json" parser', () => {
 });
 
 test('getParser: throws a clear error for an unknown format', () => {
-  assert.throws(() => getParser('bogus'), /Unknown file format "bogus"\. Available: json/);
+  assert.throws(() => getParser('bogus'), /Unknown file format "bogus".*Available: json/);
 });

@@ -130,8 +130,9 @@ Copy `.env.example` to `.env` to override defaults. All vars optional; explicit 
 - `SCHEMA_SNAPSHOT_STORE_TYPE` (default `git`) — default `--store-type` (only `git` registered)
 - `SCHEMA_SNAPSHOT_FILE_FORMAT` (default `json`) — default `--file-format` (only `json` registered)
 - `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR` (default `schema-snapshots`) — `add`/`show`/`get`/`diff`/`extract`/`remove`/`sync`/`status`'s default `--snapshots-dir`
+- `SCHEMA_SNAPSHOT_ENV_FILE` — explicit path to the `.env` file to load, checked before falling back to `process.cwd()/.env`. Same purpose as the `--env-file` CLI flag; set it as a real environment variable before invoking (not inside `.env` itself, chicken/egg).
 
-Loaded once at CLI startup via `src/config.js` (`dotenv`).
+Loaded once at CLI startup via `src/config.js` (`dotenv`). `--env-file`/`SCHEMA_SNAPSHOT_ENV_FILE` resolution happens before commander parses argv (`config.js`'s `resolveEnvFile()` pre-scans `process.argv` directly) — needed because dotenv must load before any other default is computed.
 
 ## Errors
 

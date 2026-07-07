@@ -26,6 +26,7 @@ class UnsupportedComboError extends SchemaSnapshotError {}
 class SyncStateError extends SchemaSnapshotError {}
 class AlreadyInitializedError extends SchemaSnapshotError {}
 class DirectoryNotEmptyError extends SchemaSnapshotError {}
+class SourceHashCollisionError extends SchemaSnapshotError {}
 
 module.exports = {
   SchemaSnapshotError,
@@ -45,4 +46,5 @@ module.exports = {
   SyncStateError,
   AlreadyInitializedError,
   DirectoryNotEmptyError,
+  SourceHashCollisionError,
 };

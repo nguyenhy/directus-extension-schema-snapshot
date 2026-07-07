@@ -178,7 +178,7 @@ class GitStore {
     await this.init();
     const rawEntries = await this.git.raw(['ls-tree', '-r', id]);
     // "<mode> blob <sha>\t<path>" per line
-    const entries = rawEntries
+    const allEntries = rawEntries
       .trim()
       .split('\n')
       .filter(Boolean)
@@ -187,19 +187,36 @@ class GitStore {
         const filePath = line.slice(tabIdx + 1);
         const sha = line.slice(0, tabIdx).split(' ')[2];
         return { filePath, sha };
-      })
-      // Entity files always live in a "<kind>/<index>.json" subpath; anything
-      // at repo root (RAW_SOURCE_FILE, map.json) is a sidecar, not an entity.
-      .filter((e) => e.filePath.endsWith('.json') && e.filePath.includes('/') && e.filePath !== RAW_SOURCE_FILE);
+      });
+
+    // Entity files always live in a "<kind>/<index>.json" subpath; anything
+    // at repo root (RAW_SOURCE_FILE, map.json) is a sidecar, not an entity.
+    const entries = allEntries.filter((e) => e.filePath.endsWith('.json') && e.filePath.includes('/') && e.filePath !== RAW_SOURCE_FILE);
+    const mapEntry = allEntries.find((e) => e.filePath === 'map.json');
 
     const contents = await batchCatFile(this.dir, entries.map((e) => e.sha));
+    // GOTCHA: filename no longer always equals the key's hash half — a
+    // hash-keyed kind (everything but "meta") may be written under its
+    // human identity name instead (see fsTree.js's fileNameFor()). map.json
+    // (read here via the same commit, not the working dir) is the only
+    // place that filename -> key mapping survives, so it's the source of
+    // truth whenever a file's kind has one. "meta" entries have no map.json
+    // rows (their filename always equals the key's name half already).
+    const [mapContent] = mapEntry ? await batchCatFile(this.dir, [mapEntry.sha]) : [];
+    const map = mapContent ? JSON.parse(mapContent) : {};
+    const keyByPath = {};
+    for (const key of Object.keys(map)) {
+      const kind = key.split(':')[0];
+      keyByPath[`${kind}/${map[key].file}.json`] = key;
+    }
 
     const tree = {};
     entries.forEach(({ filePath }, i) => {
       const slashIdx = filePath.indexOf('/');
       const kind = filePath.slice(0, slashIdx);
       const name = filePath.slice(slashIdx + 1, -'.json'.length);
-      tree[`${kind}:${name}`] = JSON.parse(contents[i]);
+      const key = kind === 'meta' ? `${kind}:${name}` : (keyByPath[filePath] || `${kind}:${name}`);
+      tree[key] = JSON.parse(contents[i]);
     });
     return tree;
   }

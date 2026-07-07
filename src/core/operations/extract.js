@@ -20,10 +20,14 @@ const { diffSchemas, buildExtractMeta, mergeIntoOld, verifyMerge } = require('./
  * auto-detected — same rule as diffSchemas). In dry-run mode (default),
  * returns the partial tree plus the dir it *would* be written to — no files
  * written. Pass dryRun: false to actually write it.
- * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object, snapshot?: boolean, snapshotFile?: string}} params
+ * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object, snapshot?: boolean, snapshotFile?: string, refOld?: string, refNew?: string}} params
+ *   `refOld`/`refNew` are the original CLI args before the caller resolved
+ *   them to `oldSchema`/`newSchema` — used only for the subdir name (see
+ *   diffSchemas'/runSubDir's {ref1}/{ref2}), defaulting to
+ *   `oldSchema`/`newSchema` when omitted.
  * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean, verification?: object} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean, verification?: object}>}
  */
-async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, subdirFormat, dryRun = true, store, parse, snapshot, snapshotFile }) {
+async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, subdirFormat, dryRun = true, store, parse, snapshot, snapshotFile, refOld = oldSchema, refNew = newSchema }) {
   if (mode !== 'added' && mode !== 'removed' && mode !== 'modified') {
     throw new UnknownExtractModeError(`Unknown extract mode "${mode}". Available: added, removed, modified`);
   }
@@ -32,6 +36,7 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
     return diffSchemas({
       a: oldSchema, b: newSchema, schemaType, store, parse,
       snapshotMode: mode, snapshotFile, outDir, subdirFormat, dryRun,
+      refA: refOld, refB: refNew,
     });
   }
 
@@ -65,7 +70,7 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
   const tree = {};
   for (const key of keys) tree[key] = sourceTree[key];
 
-  const dir = runSubDir(outDir, `${oldSchema}_${newSchema}`, subdirFormat);
+  const dir = runSubDir(outDir, `${oldSchema}_${newSchema}`, subdirFormat, { ref1: refOld, ref2: refNew, mode });
 
   if (dryRun) {
     return { dryRun: true, keys, mode, dir, tree };

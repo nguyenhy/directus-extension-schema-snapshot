@@ -30,4 +30,22 @@ function contentHash(value) {
   return crypto.createHash('sha256').update(json).digest('hex');
 }
 
-module.exports = { contentHash, sortKeysDeep };
+/** Charset/shape a string must have to be used directly as a filesystem path segment. */
+const SAFE_FILENAME = /^[A-Za-z0-9_.-]{1,100}$/;
+
+/**
+ * Whether `name` is safe to use directly as a filename (one path segment) —
+ * used to decide "original identity name" vs "hash" for on-disk entity
+ * filenames (see fsTree.js). Rejects anything that isn't a plain identifier
+ * charset, plus "." and ".." and leading-dot names (dotfiles / traversal).
+ * @param {*} name
+ * @returns {boolean}
+ */
+function isValidFilename(name) {
+  return typeof name === 'string'
+    && SAFE_FILENAME.test(name)
+    && name !== '.' && name !== '..'
+    && !name.startsWith('.');
+}
+
+module.exports = { contentHash, sortKeysDeep, isValidFilename };

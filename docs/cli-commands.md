@@ -35,8 +35,8 @@ default: `json`. Only `json` registered today.
 **`--out-dir <dir>`** (env `SCHEMA_SNAPSHOT_OUT_DIR`)
 default: `.snapshot/normalized`. `normalize`/`extract` only.
 
-**`--subdir-format <format>`** (env `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`)
-default: `{time}_{name}`. `normalize`/`extract` only.
+**`--subdir-format <format>`** (env `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`, `normalize` only)
+default: `{time}_{name}`. `diff --snapshot`/`extract` have their own `--subdir-format` (not env-configurable), default `{time}_{ref1}_{ref2}_{mode}` — `{ref1}`/`{ref2}` are the two diffed refs exactly as typed (e.g. `e1`/`e2`), `{mode}` is `added`/`removed`/`modified`.
 
 **`--cache-ref`**
 default: off. Treat id/hash args as raw GitStore commit shas — see "Which id goes where" (below `list`).
@@ -210,13 +210,13 @@ When both sides are committed versions, output is always old→new regardless of
 $ schema-snapshot diff v1.json v2.json --snapshot added
 + field:orders.tracking_number
 
-1 added snapshot -> .snapshot/normalized/20260703-114103_v1.json_v2/snapshot.json
+1 added snapshot -> .snapshot/normalized/20260703-114103_v1.json_v2.json_added/snapshot.json
 ✓ merge verified
 ```
 
 Every reconstructed snapshot is re-diffed against `<a>` to confirm the change set matches the requested mode exactly. On success: `✓ merge verified`. On failure with `--dry-run`: nothing written, exit 0, `✗ merge verification failed: ...` printed. On failure without `--dry-run`: the file is written first (for inspection), then the process throws and exits 1 — treat a non-zero exit as "don't trust this file," not "nothing was written."
 
-**Gotcha:** `--subdir-format`'s `{name}` placeholder is derived via `path.basename` on the resolved `<a>_<b>` string — if `<b>` is a file path containing `/`, directories in it (and all of `<a>`) get stripped from `{name}` (cosmetic only).
+`{ref1}`/`{ref2}` in the subdir name are `<a>`/`<b>` exactly as typed on the CLI (event id, content hash, or file path) — not the resolved GitStore commit sha, so e.g. `schema-snapshot diff e1 e2 --snapshot added` produces `..._e1_e2_added`, not a 40-char sha.
 
 ### SEE ALSO
 

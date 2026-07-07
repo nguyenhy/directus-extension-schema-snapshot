@@ -53,6 +53,7 @@ async function cmdDiff(a, b, options) {
     show: options.show, snapshotMode, snapshotFile,
     outDir: options.outDir, subdirFormat: options.subdirFormat,
     dryRun: !!options.dryRun,
+    refA: a, refB: b,
   });
 
   if (!options.show && !snapshotMode) {

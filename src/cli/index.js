@@ -65,7 +65,7 @@ program
   .option('--snapshot <mode...>', 'write a full Directus snapshot for one category: "added", "removed", or "modified"; optionally pass an output file path as the 2nd value (default: fresh subdir of --out-dir). Writes immediately; pass --dry-run to preview instead. Replaces the deprecated `extract` command.')
   .option('--dry-run', 'preview --snapshot output without writing anything')
   .option('--out-dir <dir>', 'used with --snapshot: write to a fresh subdir of this directory when no output file is given', config.defaultOutDir)
-  .option('--subdir-format <format>', 'used with --snapshot: template for the run subdir name, e.g. "{time}_{name}"', config.defaultSubdirFormat)
+  .option('--subdir-format <format>', 'used with --snapshot: template for the run subdir name — placeholders {time}, {ref1}, {ref2}, {mode} (the two diffed refs as typed, and the --snapshot category)', '{time}_{ref1}_{ref2}_{mode}')
   .option('--json', 'output the diff view as JSON (for UI / programmatic use)')
   .action(cmdDiff);
 
@@ -159,7 +159,7 @@ program
   .requiredOption('--mode <mode>', 'which part of the diff to extract: "added", "removed", or "modified"')
   .option('--no-dry-run', 'write the extracted entities to disk (default: print tree to stdout, write nothing)')
   .option('--out-dir <dir>', 'write one file per extracted entity to a fresh subdir of this directory', config.defaultOutDir)
-  .option('--subdir-format <format>', 'template for the run subdir name, e.g. "{time}_{name}" (see docs/architecture.md#subdir-format)', config.defaultSubdirFormat)
+  .option('--subdir-format <format>', 'template for the run subdir name — placeholders {time}, {ref1}, {ref2}, {mode} (the two diffed refs as typed, and --mode)', '{time}_{ref1}_{ref2}_{mode}')
   .option('--schema-type <type>', 'which normalizer to use (see core/normalizers/index.js)', config.defaultSchemaType)
   .option('--store-dir <dir>', 'where the version store (git repo) lives', config.defaultStoreDir)
   .option('--store-type <type>', 'which Store implementation to use (see core/env.js)', config.defaultStoreType)

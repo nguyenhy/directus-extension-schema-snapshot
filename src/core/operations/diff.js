@@ -103,15 +103,19 @@ function verifyMerge(treeOld, merged, result, mode) {
  *   snapshotMode?: 'added'|'removed'|'modified',
  *   snapshotFile?: string,
  *   outDir?: string, subdirFormat?: string, dryRun?: boolean,
+ *   refA?: string, refB?: string,
  * }} params
  *   `store` and `parse` are required, injected dependencies — see
  *   core/operations/add.js for the rationale. `show` is a view-only
  *   category filter (never writes). `snapshotMode` writes a full
  *   denormalized snapshot for one category — to `outDir`/a fresh subdir
- *   by default, or to `snapshotFile` if given.
+ *   by default, or to `snapshotFile` if given. `refA`/`refB` are the
+ *   *original* CLI args (e.g. "e1"/"e2") before the caller resolved them to
+ *   `a`/`b` — used only for the subdir name (see runSubDir's {ref1}/{ref2}),
+ *   defaulting to `a`/`b` themselves when omitted (e.g. file-path args).
  * @returns {Promise<ReturnType<typeof buildDiffView> | object>}
  */
-async function diffSchemas({ a, b, schemaType, store, parse, show, snapshotMode, snapshotFile, outDir, subdirFormat, dryRun = true }) {
+async function diffSchemas({ a, b, schemaType, store, parse, show, snapshotMode, snapshotFile, outDir, subdirFormat, dryRun = true, refA = a, refB = b }) {
   const { normalize, denormalize } = getNormalizer(schemaType);
   const aIsFile = fs.exists(a);
   const bIsFile = fs.exists(b);
@@ -151,7 +155,7 @@ async function diffSchemas({ a, b, schemaType, store, parse, show, snapshotMode,
     throw new SchemaSnapshotError(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
   }
 
-  const dir = runSubDir(outDir, `${a}_${b}`, subdirFormat);
+  const dir = runSubDir(outDir, `${a}_${b}`, subdirFormat, { ref1: refA, ref2: refB, mode });
   const meta = buildExtractMeta(tree, a, b, mode);
   const mergedTree = mergeIntoOld(treeOld, tree, mode);
   const verification = verifyMerge(treeOld, mergedTree, result, mode);

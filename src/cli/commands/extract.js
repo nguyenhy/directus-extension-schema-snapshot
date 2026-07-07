@@ -51,6 +51,8 @@ async function cmdExtract(oldSchema, newSchema, options) {
     parse,
     snapshot: options.snapshot,
     snapshotFile: options.snapshotFile,
+    refOld: oldSchema,
+    refNew: newSchema,
   });
 
   if (result.dryRun) {

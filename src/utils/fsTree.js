@@ -4,37 +4,42 @@ const { timestamp } = require('./timestamp');
 const { InvalidSubdirFormatError } = require('../core/errors');
 const { isValidFilename } = require('../core/hash');
 
-/** Placeholders recognized in a subdir format template, see runSubDir(). */
+/** Base placeholders recognized in every subdir format template, see runSubDir(). */
 const SUBDIR_PLACEHOLDERS = { name: 'basename of the input file (no extension)', time: 'YYYYMMDD-HHmmss' };
 
 /**
- * Builds a unique subdir path for one normalize run from a format template,
- * so repeated runs never collide/overwrite each other. Full documentation
+ * Builds a unique subdir path for one run from a format template, so
+ * repeated runs never collide/overwrite each other. Full documentation
  * (placeholders, examples, validation rules): docs/architecture.md#subdir-format.
  * @param {string} outDir - parent directory (default or --out-dir)
- * @param {string} inputPath - path to the input file being normalized
- * @param {string} format - template string using {name} and {time}
- *   placeholders, e.g. "{time}_{name}" (default) or "{name}/{time}" for a
- *   nested-by-input layout.
+ * @param {string} inputPath - path to the input file (for the {name} placeholder)
+ * @param {string} format - template string using {name}/{time} plus any key
+ *   from `extraValues`, e.g. "{time}_{name}" (normalize's default) or
+ *   "{time}_{ref1}_{ref2}_{mode}" (diff/extract's default).
+ * @param {Object.<string, string>} [extraValues] - caller-supplied
+ *   placeholders on top of {name}/{time} — e.g. diff/extract pass
+ *   { ref1, ref2, mode } so a run's subdir names what was actually diffed,
+ *   not just when.
  * @returns {string} "<outDir>/<rendered template>"
  * @throws {Error} if the template contains no placeholders, references an
  *   unknown placeholder, or renders to an unsafe path (any segment empty,
  *   "." or ".." — ".." specifically would let the rendered path escape
  *   outDir, which defeats the "always a fresh subdir" guarantee)
  */
-function runSubDir(outDir, inputPath, format) {
+function runSubDir(outDir, inputPath, format, extraValues = {}) {
   const values = {
     name: path.basename(inputPath, path.extname(inputPath)),
     time: timestamp(),
+    ...extraValues,
   };
 
   const usedPlaceholders = [...format.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
   if (usedPlaceholders.length === 0) {
-    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": must use at least one of {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": must use at least one of {${Object.keys(values).join('}, {')}}`);
   }
   for (const key of usedPlaceholders) {
     if (!(key in values)) {
-      throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+      throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(values).join('}, {')}}`);
     }
   }
 

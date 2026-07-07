@@ -1,3 +1,24 @@
+# [1.3.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.2.1...v1.3.0) (2026-07-07)
+
+
+### Bug Fixes
+
+* extract with empty `systemFields` ([fd86c4d](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/fd86c4d8f4ec01d3291cc8ec941a1590b1fcd4bd))
+* pass snapshot file path to extract view so CLI prints file not dir ([56195aa](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/56195aa18f2b82544f1fb76d1255a4cce690474b))
+* reject combined --show and --snapshot flags in diff CLI ([8e3e8f8](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/8e3e8f826ff716f6313006d5cea495ee492cd1b0))
+* retrieve tree with file is not hash ([19e7175](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/19e71758339de93f32004feb993fe60fac873ea8))
+* skip unnecessary runSubDir call when --snapshot writes to explicit file ([95dfbb9](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/95dfbb96f811cc8d1a875d8a517a08d87d432d5f))
+* update naming format for normalized files ([e493291](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/e493291fca9f1b3a80addf0d474a7b4fa86d4a9b))
+* use key as file name if it's valid, else fallback to short hash ([20ad76a](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/20ad76a6c1d0a66800600f5ad2ab178fed60656d))
+
+
+### Features
+
+* **diff:** diff is now has `extract` feature ([96dcb18](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/96dcb18c2703aedcc35c9abd43757c122224adfa))
+* **normalize:** improve the sort logic ([06984c3](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/06984c3c62d83f6ed66496f0e830d9c6da528cf6))
+* **normalize:** sort snapshot ([e2937c5](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/e2937c58efa1c94294b684d3ae195057b54163f4))
+* shorten filename snapshot of `add` command ([fee50bb](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/fee50bbe700883c4bcc1ae97a51e96943d72b259))
+
 ## [1.2.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.2.0...v1.2.1) (2026-07-05)
 
 

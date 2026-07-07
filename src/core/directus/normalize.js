@@ -83,7 +83,7 @@ function entityIdentity(schemaKey, item) {
  * what the source content contains.
  * @param {'collections'|'fields'|'systemFields'|'relations'} schemaKey - Directus schema section name
  * @param {object} item - raw item from that section
- * @returns {string} e.g. "collection:3f2b9c...", "field:9a01de..."
+ * @returns {string} e.g. "collection:3f2b9c2a91de", "field:9a01deadbeef"
  * @throws {Error} if schemaKey is not one of the known array section names
  */
 function entityKey(schemaKey, item) {
@@ -91,7 +91,9 @@ function entityKey(schemaKey, item) {
   if (!label) {
     throw new UnknownEntityKindError(`Unknown entity kind "${schemaKey}"`);
   }
-  return `${label}:${contentHash(entityIdentity(schemaKey, item))}`;
+  // 12 hex chars (48 bits) is plenty for one tree's entity count; full sha256
+  // is reserved for cross-device content addressing (see snapshotSync/eventLog.js).
+  return `${label}:${contentHash(entityIdentity(schemaKey, item)).slice(0, 12)}`;
 }
 
 /**

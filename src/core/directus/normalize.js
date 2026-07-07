@@ -18,12 +18,12 @@ const VOLATILE_KEYS = new Set(['id', 'date_created', 'date_updated', 'user_creat
  * EntityTree key prefix ("<entityLabel>:<hash>") and has no relation to
  * Directus's own casing.
  */
-const ARRAY_SECTIONS = [
+const ARRAY_SECTIONS = /** @type {const} */ ([
   { schemaKey: 'collections', entityLabel: 'collection' },
   { schemaKey: 'fields', entityLabel: 'field' },
   { schemaKey: 'systemFields', entityLabel: 'systemfield' },
   { schemaKey: 'relations', entityLabel: 'relation' },
-];
+]);
 
 /** schemaKey -> entityLabel, e.g. entityKey()'s ARRAY_SECTIONS lookup. */
 const ENTITY_LABEL_BY_SCHEMA_KEY = Object.fromEntries(
@@ -127,11 +127,30 @@ function normalize(rawSchema) {
 }
 
 /**
+ * Compares two entities by identity (collection, or collection+field) —
+ * same ordering convention Directus's own snapshot generator uses
+ * (sortBy(['collection', 'meta.id']), minus meta.id since we drop it as
+ * volatile). `collection`-only entities (entityLabel 'collection') have no
+ * `field`, so the second key is never compared for them.
+ * @param {string} entityLabel
+ * @returns {(a: object, b: object) => number}
+ */
+function compareByIdentity(entityLabel) {
+  return (a, b) => {
+    const byCollection = String(a.collection).localeCompare(String(b.collection));
+    if (byCollection !== 0 || entityLabel === 'collection') return byCollection;
+    return String(a.field).localeCompare(String(b.field));
+  };
+}
+
+/**
  * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
- * Groups array-section entities by kind, sorted stably by key (hashes have
- * no meaningful order, so this is deterministic output, not original-array-
- * order-preserving — same guarantee the old name-based keys gave). Rebuilds
- * scalar fields (version/directus/vendor) from their "meta:*" entries.
+ * Groups array-section entities by kind, then sorts each group by identity
+ * (collection, or collection+field) — same canonical order Directus's own
+ * snapshot generator produces, making two exported snapshot.json files
+ * diffable by eye/git-diff regardless of the hash-keyed EntityTree's
+ * internal iteration order. Rebuilds scalar fields (version/directus/vendor)
+ * from their "meta:*" entries.
  * @param {import('../normalizers').EntityTree} tree
  * @returns {object} Directus schema shape
  */
@@ -139,8 +158,7 @@ function denormalize(tree) {
   const grouped = Object.fromEntries(ARRAY_SECTIONS.map(({ entityLabel }) => [entityLabel, []]));
   const scalars = {};
 
-  const keys = Object.keys(tree).sort();
-  for (const key of keys) {
+  for (const key of Object.keys(tree)) {
     const sepIdx = key.indexOf(':');
     const label = key.slice(0, sepIdx);
     const rest = key.slice(sepIdx + 1);
@@ -149,6 +167,10 @@ function denormalize(tree) {
     } else if (grouped[label]) {
       grouped[label].push(tree[key]);
     }
+  }
+
+  for (const { entityLabel } of ARRAY_SECTIONS) {
+    grouped[entityLabel].sort(compareByIdentity(entityLabel));
   }
 
   const arraySections = Object.fromEntries(

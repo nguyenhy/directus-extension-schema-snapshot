@@ -4,89 +4,22 @@ const { getNormalizer } = require('../normalizers');
 const { diff } = require('../diff');
 const { runSubDir, writeTreeToDir } = require('../../utils/fsTree');
 const { buildExtractView } = require('../present/extract');
-const { buildTreeSummary } = require('../treeSummary');
-const pkg = require('../../../package.json');
-const { UnknownExtractModeError, UnsupportedComboError, SchemaSnapshotError } = require('../errors');
+const { UnknownExtractModeError, UnsupportedComboError } = require('../errors');
+const { diffSchemas, buildExtractMeta, mergeIntoOld, verifyMerge } = require('./diff');
 
 /**
- * Builds the meta.json summary for one extract run.
- * @param {import('../normalizers').EntityTree} tree - partial extracted EntityTree
- * @param {string} oldSchema - identifier of old schema
- * @param {string} newSchema - identifier of new schema
- * @param {'added'|'removed'|'modified'} mode
- * @returns {object} extract run metadata
- */
-function buildExtractMeta(tree, oldSchema, newSchema, mode) {
-  return {
-    old: oldSchema,
-    new: newSchema,
-    mode,
-    timestamp: new Date().toISOString(),
-    toolVersion: pkg.version,
-    ...buildTreeSummary(tree),
-  };
-}
-
-
-/**
- * Reconstructs a full EntityTree by overlaying a partial delta tree onto the
- * old tree — used for --snapshot/--snapshot-file output, which must be a
- * complete, applyable schema, not just the isolated changed entities.
- * @param {import('../normalizers').EntityTree} treeOld
- * @param {import('../normalizers').EntityTree} deltaTree - subset keyed by the extract mode
- * @param {'added'|'removed'|'modified'} mode
- * @returns {import('../normalizers').EntityTree}
- */
-function mergeIntoOld(treeOld, deltaTree, mode) {
-  if (mode === 'removed') {
-    const merged = { ...treeOld };
-    for (const key of Object.keys(deltaTree)) delete merged[key];
-    return merged;
-  }
-  return { ...treeOld, ...deltaTree };
-}
-
-/**
- * Re-diffs treeOld vs the merged tree and asserts the change set matches
- * the mode's key set exactly — catches a bad mergeIntoOld, a stale treeOld,
- * or wrong mode handling before a bad snapshot.json is trusted or written.
- * GOTCHA: for the two categories that don't match `mode`, the *entire*
- * mergeDiff list for that category counts as unexpected (not filtered
- * against expectedKeys) — correct only because extraction is single-mode
- * today, so e.g. `expectedKeys` is always empty for `added`/`removed` when
- * `mode === 'modified'`. If mixed-mode merges are ever supported, this
- * function needs `expectedKeys` split per-category instead of one list.
- * @param {import('../normalizers').EntityTree} treeOld
- * @param {import('../normalizers').EntityTree} merged
- * @param {import('../diff').DiffResult} result - the diff already computed between treeOld and treeNew
- * @param {'added'|'removed'|'modified'} mode
- * @returns {{ok: boolean, unexpectedAdded: string[], unexpectedRemoved: string[], unexpectedModified: string[], missingKeys: string[]}}
- */
-function verifyMerge(treeOld, merged, result, mode) {
-  const mergeDiff = diff(treeOld, merged);
-  const expectedKeys = mode === 'added' ? result.added
-    : mode === 'removed' ? result.removed
-    : result.modified.map((m) => m.key);
-
-  const actualModifiedKeys = mergeDiff.modified.map((m) => m.key);
-  const actualKeys = mode === 'added' ? mergeDiff.added : mode === 'removed' ? mergeDiff.removed : actualModifiedKeys;
-
-  const unexpectedAdded = mode === 'added' ? mergeDiff.added.filter((k) => !expectedKeys.includes(k)) : mergeDiff.added;
-  const unexpectedRemoved = mode === 'removed' ? mergeDiff.removed.filter((k) => !expectedKeys.includes(k)) : mergeDiff.removed;
-  const unexpectedModified = mode === 'modified' ? actualModifiedKeys.filter((k) => !expectedKeys.includes(k)) : actualModifiedKeys;
-  const missingKeys = expectedKeys.filter((k) => !actualKeys.includes(k));
-
-  const ok = unexpectedAdded.length === 0 && unexpectedRemoved.length === 0 && unexpectedModified.length === 0 && missingKeys.length === 0;
-
-  return { ok, unexpectedAdded, unexpectedRemoved, unexpectedModified, missingKeys };
-}
-
-/**
+ * @deprecated use diffSchemas({ ..., snapshotMode, snapshotFile }) from
+ * core/operations/diff.js instead — `extract <old> <new> --mode X --snapshot
+ * --no-dry-run` is now `diff <old> <new> --snapshot X`. Kept for the
+ * `extract` CLI command's back-compat flags; delegates to diffSchemas for
+ * the --snapshot/--snapshot-file cases (buildExtractMeta/mergeIntoOld/
+ * verifyMerge now live in diff.js, re-exported here for existing callers).
+ *
  * Extracts a partial EntityTree containing only added-or-only-removed/modified
  * entities between two schemas (file paths or committed version IDs,
- * auto-detected — same rule as diffSchemas in core/operations/diff.js).
- * In dry-run mode (default), returns the partial tree plus the dir it
- * *would* be written to — no files written. Pass dryRun: false to actually write it.
+ * auto-detected — same rule as diffSchemas). In dry-run mode (default),
+ * returns the partial tree plus the dir it *would* be written to — no files
+ * written. Pass dryRun: false to actually write it.
  * @param {{oldSchema: string, newSchema: string, mode: 'added'|'removed'|'modified', schemaType: string, outDir: string, subdirFormat: string, dryRun?: boolean, store: import('../store/store').Store, parse: (filePath: string) => object, snapshot?: boolean, snapshotFile?: string}} params
  * @returns {Promise<{dryRun: true, keys: string[], mode: 'added'|'removed'|'modified', dir: string, tree: import('../normalizers').EntityTree, snapshot?: object, meta?: object, isSnapshot?: boolean, verification?: object} | {dryRun: false, view: ReturnType<typeof buildExtractView>, tree: import('../normalizers').EntityTree, file?: string, isSnapshot?: boolean, verification?: object}>}
  */
@@ -95,12 +28,17 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
     throw new UnknownExtractModeError(`Unknown extract mode "${mode}". Available: added, removed, modified`);
   }
 
-  const normalizer = getNormalizer(schemaType);
-  const { normalize, denormalize } = normalizer;
-  if ((snapshot || snapshotFile) && !denormalize) {
-    throw new SchemaSnapshotError(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
+  if (snapshot || snapshotFile) {
+    return diffSchemas({
+      a: oldSchema, b: newSchema, schemaType, store, parse,
+      snapshotMode: mode, snapshotFile, outDir, subdirFormat, dryRun,
+    });
   }
 
+  // Legacy plain path (no --snapshot/--snapshot-file): writes one file per
+  // extracted entity, not a full denormalized snapshot — diffSchemas
+  // dropped this format, so it stays here for old `extract` callers only.
+  const { normalize } = getNormalizer(schemaType);
   const oldIsFile = fs.exists(oldSchema);
   const newIsFile = fs.exists(newSchema);
 
@@ -128,73 +66,16 @@ async function extractSchemas({ oldSchema, newSchema, mode, schemaType, outDir, 
   for (const key of keys) tree[key] = sourceTree[key];
 
   const dir = runSubDir(outDir, `${oldSchema}_${newSchema}`, subdirFormat);
-  const meta = buildExtractMeta(tree, oldSchema, newSchema, mode);
-  const mergedTree = (snapshot || snapshotFile) ? mergeIntoOld(treeOld, tree, mode) : null;
-  const verification = mergedTree ? verifyMerge(treeOld, mergedTree, result, mode) : null;
 
   if (dryRun) {
-    if (snapshot || snapshotFile) {
-      return {
-        dryRun: true,
-        keys,
-        mode,
-        dir,
-        tree,
-        snapshot: denormalize(mergedTree),
-        meta,
-        isSnapshot: true,
-        verification,
-      };
-    }
     return { dryRun: true, keys, mode, dir, tree };
-  }
-
-  if (snapshotFile) {
-    const parentDir = path.dirname(snapshotFile);
-    if (parentDir) {
-      fs.mkdir(parentDir);
-    }
-    const snapshotData = denormalize(mergedTree);
-    fs.writeFile(snapshotFile, JSON.stringify(snapshotData, null, 2) + '\n');
-
-    const metaFile = snapshotFile.endsWith('.json')
-      ? snapshotFile.slice(0, -5) + '.meta.json'
-      : snapshotFile + '.meta.json';
-    fs.writeFile(metaFile, JSON.stringify(meta, null, 2) + '\n');
-
-    return {
-      dryRun: false,
-      view: buildExtractView(keys, mode, parentDir),
-      tree,
-      file: snapshotFile,
-      isSnapshot: true,
-      verification,
-    };
-  }
-
-  if (snapshot) {
-    fs.mkdir(dir);
-    const snapshotData = denormalize(mergedTree);
-    const file = path.join(dir, 'snapshot.json');
-    fs.writeFile(file, JSON.stringify(snapshotData, null, 2) + '\n');
-    fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
-
-    return {
-      dryRun: false,
-      view: buildExtractView(keys, mode, dir),
-      tree,
-      file,
-      isSnapshot: true,
-      verification,
-    };
   }
 
   fs.mkdir(dir);
   writeTreeToDir(tree, dir);
-  fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
+  fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(buildExtractMeta(tree, oldSchema, newSchema, mode), null, 2) + '\n');
 
   return { dryRun: false, view: buildExtractView(keys, mode, dir), tree };
 }
-
 
 module.exports = { extractSchemas, buildExtractMeta, mergeIntoOld, verifyMerge };

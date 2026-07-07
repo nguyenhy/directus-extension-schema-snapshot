@@ -64,6 +64,7 @@ One-command onboarding: copies the bundled `.env.schema-snapshot.example` templa
 **Where `.env.schema-snapshot` goes:** the nearest ancestor directory containing a `package.json`, walking up from `dir` (including `dir` itself) — matching how a user would `cd` into their project root and run commands without `--env-file`. If no `package.json` is found anywhere up the tree, it's written directly into `dir`. The local store cache and `.gitignore` always stay local to `dir`, regardless of where `.env.schema-snapshot` landed.
 
 **Why `.env.schema-snapshot`, not `.env`:**
+
 - **Isolation** — schema-snapshot's config never mixes with a host app's own env vars.
 - **Prevents accidental overwrite** — `init` can never clobber a `.env` the host project already depends on; if one exists at the resolved root, it's simply untouched.
 - You're still free to consolidate manually — copy the values into your own `.env`, or point `--env-file`/`SCHEMA_SNAPSHOT_ENV_FILE` at whichever file you prefer. `init`'s default is the safe default, not a requirement.
@@ -71,6 +72,7 @@ One-command onboarding: copies the bundled `.env.schema-snapshot.example` templa
 **Why not a JSON/JS config file instead:** deferred, not rejected. `.env` was chosen first because it's the convention every Node dev already expects, and it matches the existing `SCHEMA_SNAPSHOT_*` env-var surface every other command already reads (see [Global options](#global-options) above). A `schema-snapshot.config.json`/`.js` loader can layer on top of this later without breaking it — env vars would still win over config-file values, same precedence `envOr()` already uses today.
 
 **Reject conditions:**
+
 - `dir` contains `schema-snapshots/` or `.snapshot/` — already initialized; `init` is a one-time setup, not an idempotent sync. Run commands directly instead.
 - `dir` has other real content (not OS junk, not `.env`/`.env.schema-snapshot`/`package.json`) — likely the wrong target; pick an empty dir. `.env`/`package.json` are allowed to preexist since `dir` may legitimately already be a project root.
 
@@ -78,17 +80,17 @@ One-command onboarding: copies the bundled `.env.schema-snapshot.example` templa
 
 Every flag below is written into the scaffolded `.env.schema-snapshot` as the matching `SCHEMA_SNAPSHOT_*` var (see Global options for what each var controls) — using either the flag's explicit value or its default, so the written file always matches what this run actually used. Ignored (with the file left untouched) if `.env.schema-snapshot` already existed at the resolved env root.
 
-| flag                       | env var written                     |
-| --------------------------- | ------------------------------------ |
-| `[dir]`                    | target directory, default `.` — not written, just where things go |
-| `--out-dir <dir>`          | `SCHEMA_SNAPSHOT_OUT_DIR`            |
-| `--schema-type <type>`     | `SCHEMA_SNAPSHOT_TYPE`               |
-| `--subdir-format <format>` | `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`      |
+| flag                       | env var written                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `[dir]`                    | target directory, default `.` — not written, just where things go                  |
+| `--out-dir <dir>`          | `SCHEMA_SNAPSHOT_OUT_DIR`                                                          |
+| `--schema-type <type>`     | `SCHEMA_SNAPSHOT_TYPE`                                                             |
+| `--subdir-format <format>` | `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`                                                    |
 | `--store-dir <dir>`        | `SCHEMA_SNAPSHOT_STORE_DIR` (also the local store cache dir, created inside `dir`) |
-| `--store-type <type>`      | `SCHEMA_SNAPSHOT_STORE_TYPE`         |
-| `--file-format <format>`   | `SCHEMA_SNAPSHOT_FILE_FORMAT`        |
-| `--snapshots-dir <dir>`    | `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR`      |
-| `--json`                   | output the init view as JSON (for UI / programmatic use) — not written |
+| `--store-type <type>`      | `SCHEMA_SNAPSHOT_STORE_TYPE`                                                       |
+| `--file-format <format>`   | `SCHEMA_SNAPSHOT_FILE_FORMAT`                                                      |
+| `--snapshots-dir <dir>`    | `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR`                                                    |
+| `--json`                   | output the init view as JSON (for UI / programmatic use) — not written             |
 
 ### EXAMPLES
 
@@ -150,33 +152,47 @@ schema-snapshot normalize schema.json --subdir-format "{name}/{time}"  # custom 
 
 ### NAME
 
-diff — compare two schemas and report structural differences
+diff — compare two schemas, report structural differences, filter to one category, or write a reconstructed snapshot for one category
 
 ### SYNOPSIS
 
 ```bash
-schema-snapshot diff <a> <b> [--cache-ref] [--json] [global options]
+schema-snapshot diff <a> <b> [--show mode] [--snapshot mode [outFile]] [--dry-run] [--out-dir dir] [--subdir-format fmt] [--cache-ref] [--json] [global options]
 ```
 
 ### DESCRIPTION
 
-Compares schema `a` against schema `b` entity by entity. Each argument is auto-detected: an existing file path is normalized fresh, anything else is treated as an event id or content hash and resolved against the committed version history. Output lists added, removed, and modified entities, with per-field old→new values for modifications.
+Compares schema `a` against schema `b` entity by entity. Each argument is auto-detected: an existing file path is normalized fresh, anything else is treated as an event id or content hash and resolved against the committed version history.
+
+Three modes, mutually exclusive:
+
+- default: full added/removed/modified report, with per-field old→new values for modifications.
+- `--show <mode>`: filter the report to one category (`added`, `removed`, or `modified`) — view only, never writes.
+- `--snapshot <mode> [outFile]`: reconstruct a full schema for one category by overlaying that category's delta back onto `<a>`, with the result automatically verified before being trusted. Writes immediately; pass `--dry-run` to preview without writing. Omit `outFile` to write `snapshot.json` + `meta.json` to a fresh subdir of `--out-dir` instead of an exact path. This absorbs what the now-deprecated `extract --mode X --snapshot --no-dry-run` used to do.
 
 ### OPTIONS
 
-| flag                                                                               | meaning                   |
-| ---------------------------------------------------------------------------------- | ------------------------- |
-| `--cache-ref`                                                                      | see "Which id goes where" |
-| `--json`                                                                           | see Global options        |
-| `--store-dir`, `--store-type`, `--schema-type`, `--file-format`, `--snapshots-dir` | see Global options        |
+| flag                                                                               | meaning                                                                |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--show <mode>`                                                                    | filter the report to `added`, `removed`, or `modified` — view only     |
+| `--snapshot <mode> [outFile]`                                                      | write a full reconstructed schema for one category; writes by default  |
+| `--dry-run`                                                                        | preview `--snapshot` output without writing anything                   |
+| `--out-dir <dir>`, `--subdir-format <format>`                                      | used with `--snapshot` when no `outFile` is given — see Global options |
+| `--cache-ref`                                                                      | see "Which id goes where"                                              |
+| `--json`                                                                           | see Global options                                                     |
+| `--store-dir`, `--store-type`, `--schema-type`, `--file-format`, `--snapshots-dir` | see Global options                                                     |
 
 ### EXAMPLES
 
 ```bash
-schema-snapshot diff v1.json v2.json               # compare two raw files
-schema-snapshot diff e1 e2                         # compare two committed versions by event id
-schema-snapshot diff v1.json e2                    # compare a raw file against a committed version
-schema-snapshot diff --cache-ref abc1234 def5678   # compare two raw git commit shas directly
+schema-snapshot diff v1.json v2.json                              # compare two raw files, full report
+schema-snapshot diff e1 e2                                        # compare two committed versions by event id
+schema-snapshot diff v1.json e2                                   # compare a raw file against a committed version
+schema-snapshot diff --cache-ref abc1234 def5678                  # compare two raw git commit shas directly
+schema-snapshot diff v1.json v2.json --show added                 # view only added entities, no write
+schema-snapshot diff v1.json v2.json --snapshot added             # write reconstructed schema, dir mode
+schema-snapshot diff v1.json v2.json --snapshot added out.json    # write reconstructed schema to exact path
+schema-snapshot diff v1.json v2.json --snapshot added --dry-run   # preview reconstructed schema, nothing written
 ```
 
 ```
@@ -190,9 +206,21 @@ schema-snapshot diff --cache-ref abc1234 def5678   # compare two raw git commit 
 
 When both sides are committed versions, output is always old→new regardless of argument order. With a file argument, the order you type is the order used.
 
+```
+$ schema-snapshot diff v1.json v2.json --snapshot added
++ field:orders.tracking_number
+
+1 added snapshot -> .snapshot/normalized/20260703-114103_v1.json_v2/snapshot.json
+✓ merge verified
+```
+
+Every reconstructed snapshot is re-diffed against `<a>` to confirm the change set matches the requested mode exactly. On success: `✓ merge verified`. On failure with `--dry-run`: nothing written, exit 0, `✗ merge verification failed: ...` printed. On failure without `--dry-run`: the file is written first (for inspection), then the process throws and exits 1 — treat a non-zero exit as "don't trust this file," not "nothing was written."
+
+**Gotcha:** `--subdir-format`'s `{name}` placeholder is derived via `path.basename` on the resolved `<a>_<b>` string — if `<b>` is a file path containing `/`, directories in it (and all of `<a>`) get stripped from `{name}` (cosmetic only).
+
 ### SEE ALSO
 
-"Which id goes where" (below `list`)
+"Which id goes where" (below `list`); [core/operations/diff.js](../src/core/operations/diff.js)'s `verifyMerge()` doc comment for the `--snapshot` verification contract
 
 ---
 
@@ -481,65 +509,21 @@ schema-snapshot status   # check local cache is in sync with schema-snapshots/me
 
 ---
 
-## EXTRACT
+## EXTRACT (deprecated)
 
 ### NAME
 
-extract — pull out only the added, removed, or modified entities between two schemas
-
-### SYNOPSIS
-
-```bash
-schema-snapshot extract <old> <new> --mode added|removed|modified [--no-dry-run] [--snapshot] [--snapshot-file path] [--cache-ref] [--json] [global options]
-```
+extract — deprecated; pull out only the added, removed, or modified entities between two schemas
 
 ### DESCRIPTION
 
-Computes the difference between two schemas like `diff`, but instead of a report, produces a partial entity tree containing only the entities matching the chosen mode. Can optionally reconstruct a full schema file by overlaying that partial delta back onto the old schema, with the result automatically verified before being trusted.
+**Deprecated in favor of `diff`.** `extract <old> <new> --mode X --snapshot --no-dry-run` is now `diff <old> <new> --snapshot X`; `extract <old> <new> --mode X --snapshot-file path --no-dry-run` is now `diff <old> <new> --snapshot X path`. See the DIFF section above for the current flags, examples, and merge-verification behavior — identical output and semantics, just reached through `diff`.
 
-### OPTIONS
-
-| flag                                          | meaning                                                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `--mode <mode>`                               | **required** — `added`, `removed`, or `modified`                                                       |
-| `--no-dry-run`                                | write files to disk (default: print to stdout only)                                                    |
-| `--snapshot`                                  | reconstruct a full schema by overlaying the delta onto `<old>`, write as `snapshot.json` + `meta.json` |
-| `--snapshot-file <path>`                      | same reconstruction, written to an exact path instead                                                  |
-| `--cache-ref`                                 | see "Which id goes where"                                                                              |
-| `--out-dir <dir>`, `--subdir-format <format>` | see Global options                                                                                     |
-| `--schema-type`                               | see Global options                                                                                     |
-| `--store-dir`,                                | see Global options                                                                                     |
-| `--store-type`,                               | see Global options                                                                                     |
-| `--file-format`                               | see Global options                                                                                     |
-| `--snapshots-dir`,                            | see Global options                                                                                     |
-| ``--json`                                     | see Global options                                                                                     |
-
-Supported `<old>`/`<new>` combinations: file+file, id/hash+file, id/hash+id/hash. `<old>` as a file with `<new>` as an id/hash is rejected.
-
-### EXAMPLES
-
-```bash
-schema-snapshot extract v1.json v2.json --mode added                          # dry-run, print only added entities
-schema-snapshot extract v1.json v2.json --mode added --no-dry-run             # write added entities to disk
-schema-snapshot extract v1.json v2.json --mode modified --no-dry-run          # write only modified entities to disk
-schema-snapshot extract v1.json v2.json --mode added --snapshot --no-dry-run  # write a full reconstructed schema
-```
-
-```
-$ schema-snapshot extract v1.json v2.json --mode added --snapshot --no-dry-run
-+ field:orders.tracking_number
-
-1 added snapshot -> .snapshot/normalized/20260703-114103_v1.json_v2/snapshot.json
-✓ merge verified
-```
-
-Every reconstructed snapshot is re-diffed against `<old>` to confirm the change set matches the extracted mode exactly. On success: `✓ merge verified`. On failure in dry-run: `✗ merge verification failed: ...`, nothing written, exit 0. On failure with `--no-dry-run`: the file is written first (for inspection), then the process throws and exits 1 — treat a non-zero exit as "don't trust this file," not "nothing was written."
-
-**Gotcha:** `--subdir-format`'s `{name}` placeholder is derived via `path.basename` on the resolved `<old>_<new>` string — if `<new>` is a file path containing `/`, directories in it (and all of `<old>`) get stripped from `{name}` (cosmetic only).
+`extract` still works and keeps its original flags (`--mode`, `--no-dry-run`, `--snapshot`, `--snapshot-file`) for one plain-write case `diff` does not cover: writing one file per extracted entity (`--mode X --no-dry-run` with neither `--snapshot` nor `--snapshot-file`). Every invocation prints a one-line deprecation warning to stderr. Run `schema-snapshot extract --help` for the full flag list.
 
 ### SEE ALSO
 
-`diff` (same comparison, report instead of extraction), [core/operations/extract.js](../src/core/operations/extract.js)'s `verifyMerge()` doc comment
+`diff` (current interface — same comparison, plus report/filter/snapshot in one command), [core/operations/extract.js](../src/core/operations/extract.js), [core/operations/diff.js](../src/core/operations/diff.js)'s `verifyMerge()` doc comment
 
 ---
 

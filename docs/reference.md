@@ -29,6 +29,24 @@ hashing identity (not raw name) keeps the key a safe fixed-charset string regard
 
 the key is still string-split on `:`, not parsed via a shared helper — `fsTree.js`, `treeSummary.js`, and `present/show.js` all do their own key handling. Since the format switched to a hash, collection/field identity is no longer recoverable from the key at all — those files now read it off the entity's own value (`entity.collection`/`entity.field`) instead. Changing `entityKey()`'s shape again breaks all of them silently, no compile error. Also see `utils/fsTree.js`'s `map.json` sidecar below — it exists specifically because the key itself no longer reveals which entity it is.
 
+## Schema section names & denormalize ordering
+
+### What
+
+`ARRAY_SECTIONS` — the 4 array-valued top-level schema sections, each an entry `{schemaKey, entityLabel, identityKeys}`. `schemaKey` is the exact key Directus uses in its schema export; `entityLabel` is this repo's internal singular label used as the `EntityTree` key prefix; `identityKeys` says which entity fields `denormalize()` sorts that section's array by.
+
+### Where
+
+`core/directus/normalize.js`.
+
+### Why
+
+`schemaKey` casing is not uniform: Directus's own [`getSnapshot()`](https://github.com/directus/directus/blob/main/api/src/utils/get-snapshot.ts) emits `systemFields` camelCase, unlike the other plural section names (`collections`, `fields`, `relations`). `denormalize()` sorts each output array by its declared `identityKeys` (`collection` alone for collections, `collection`+`field` otherwise) — same convention Directus's own generator uses — so two exported `snapshot.json` files diff cleanly by eye/git-diff regardless of the hash-keyed `EntityTree`'s internal iteration order.
+
+### Gotcha
+
+a prior version of this code assumed `systemfields` (lowercase) for both the input schema key and denormalized output, which silently made `extract --snapshot`'s `systemFields` always empty against real Directus exports (input key never matched, so it always fell through to `[]`). If you add a 5th array section or touch `ARRAY_SECTIONS`, confirm the `schemaKey` against Directus's actual export shape, not an assumed casing.
+
 ## Diff semantics traps
 
 ### What

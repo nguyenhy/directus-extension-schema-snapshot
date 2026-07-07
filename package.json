@@ -1,6 +1,6 @@
 {
   "name": "schema-snapshot",
-  "version": "1.0.4",
+  "version": "1.2.1",
   "description": "Version-control schema exports (Directus) as diffable, per-entity snapshots — snapshot, diff, and extract exactly what changed",
   "keywords": [
     "directus",
@@ -20,7 +20,8 @@
   },
   "files": [
     "src",
-    "types"
+    "types",
+    ".env.schema-snapshot.example"
   ],
   "types": "./types/index.d.ts",
   "engines": {

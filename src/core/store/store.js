@@ -6,6 +6,14 @@
  * implementation; read its method docs for behavioral detail, this file
  * is the checklist a new implementation must match.
  *
+ * @property {function(): Promise<void>} init
+ *   Ensures the store's backing repo/dir exists and is usable — safe to
+ *   call repeatedly (no-op if already initialized). GitStore checks for
+ *   its own `.git/` before running `git init`. Called by
+ *   core/operations/init.js during `schema-snapshot init`; every other
+ *   operation relies on the Store already being usable and never calls
+ *   this itself.
+ *
  * @property {function(): Promise<{id: string, timestamp: string, message: string}[]>} list
  *   Returns all committed versions, newest first. Empty array if none exist.
  *

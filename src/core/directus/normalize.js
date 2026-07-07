@@ -10,14 +10,25 @@ const { contentHash } = require('../hash');
 const VOLATILE_KEYS = new Set(['id', 'date_created', 'date_updated', 'user_created', 'user_updated']);
 
 /**
- * Array-valued top-level schema sections -> singular key label.
+ * Array-valued top-level schema sections. `schemaKey` is the exact key
+ * Directus uses in its schema export (see
+ * https://github.com/directus/directus/blob/main/api/src/utils/get-snapshot.ts
+ * — `systemFields` is camelCase there, unlike the other plural section
+ * names). `entityLabel` is this repo's internal singular label used as the
+ * EntityTree key prefix ("<entityLabel>:<hash>") and has no relation to
+ * Directus's own casing.
  */
-const ARRAY_KINDS = {
-  collections: 'collection',
-  fields: 'field',
-  systemfields: 'systemfield',
-  relations: 'relation',
-};
+const ARRAY_SECTIONS = /** @type {const} */ ([
+  { schemaKey: 'collections', entityLabel: 'collection', identityKeys: ['collection'] },
+  { schemaKey: 'fields', entityLabel: 'field', identityKeys: ['collection', 'field'] },
+  { schemaKey: 'systemFields', entityLabel: 'systemfield', identityKeys: ['collection', 'field'] },
+  { schemaKey: 'relations', entityLabel: 'relation', identityKeys: ['collection', 'field'] },
+]);
+
+/** schemaKey -> entityLabel, e.g. entityKey()'s ARRAY_SECTIONS lookup. */
+const ENTITY_LABEL_BY_SCHEMA_KEY = Object.fromEntries(
+  ARRAY_SECTIONS.map(({ schemaKey, entityLabel }) => [schemaKey, entityLabel]),
+);
 
 /** Primitive top-level schema fields, stored one-per-key under the "meta" label. */
 const SCALAR_KINDS = ['version', 'directus', 'vendor'];
@@ -51,12 +62,12 @@ function stripVolatile(value) {
  * content. Keeping this independent of e.g. `type`/`meta` is what lets the
  * same field be recognized as "modified" (same key, different content)
  * across versions instead of showing up as a remove+add.
- * @param {'collections'|'fields'|'systemfields'|'relations'} kind
+ * @param {'collections'|'fields'|'systemFields'|'relations'} schemaKey
  * @param {object} item
  * @returns {object}
  */
-function entityIdentity(kind, item) {
-  return kind === 'collections' ? { collection: item.collection } : { collection: item.collection, field: item.field };
+function entityIdentity(schemaKey, item) {
+  return schemaKey === 'collections' ? { collection: item.collection } : { collection: item.collection, field: item.field };
 }
 
 /**
@@ -70,23 +81,23 @@ function entityIdentity(kind, item) {
  * add/remove/modified detection in diff.js still works by identity), while
  * guaranteeing the key is always a safe fixed-charset string regardless of
  * what the source content contains.
- * @param {'collections'|'fields'|'systemfields'|'relations'} kind - plural schema section name
+ * @param {'collections'|'fields'|'systemFields'|'relations'} schemaKey - Directus schema section name
  * @param {object} item - raw item from that section
  * @returns {string} e.g. "collection:3f2b9c...", "field:9a01de..."
- * @throws {Error} if kind is not one of the known array section names
+ * @throws {Error} if schemaKey is not one of the known array section names
  */
-function entityKey(kind, item) {
-  const label = ARRAY_KINDS[kind];
+function entityKey(schemaKey, item) {
+  const label = ENTITY_LABEL_BY_SCHEMA_KEY[schemaKey];
   if (!label) {
-    throw new UnknownEntityKindError(`Unknown entity kind "${kind}"`);
+    throw new UnknownEntityKindError(`Unknown entity kind "${schemaKey}"`);
   }
-  return `${label}:${contentHash(entityIdentity(kind, item))}`;
+  return `${label}:${contentHash(entityIdentity(schemaKey, item))}`;
 }
 
 /**
  * Directus schema export -> flat map of entityKey -> cleaned entity.
  * Accepts either { data: { version, directus, vendor, collections, fields,
- * systemfields, relations } } or the bare (un-{data}-wrapped) shape.
+ * systemFields, relations } } or the bare (un-{data}-wrapped) shape.
  *
  * Scalar fields (version, directus, vendor) each become their own
  * "meta:<name>" entry. Array sections become "<kind>:<hash>" entries, one
@@ -105,11 +116,10 @@ function normalize(rawSchema) {
     }
   }
 
-  const arrayKinds = /** @type {(keyof typeof ARRAY_KINDS)[]} */ (Object.keys(ARRAY_KINDS));
-  for (const kind of arrayKinds) {
-    const items = Array.isArray(root[kind]) ? root[kind] : [];
+  for (const { schemaKey } of ARRAY_SECTIONS) {
+    const items = Array.isArray(root[schemaKey]) ? root[schemaKey] : [];
     for (const item of items) {
-      tree[entityKey(kind, item)] = stripVolatile(item);
+      tree[entityKey(schemaKey, item)] = stripVolatile(item);
     }
   }
 
@@ -117,37 +127,59 @@ function normalize(rawSchema) {
 }
 
 /**
+ * Compares two entities by a section's declared `identityKeys` (see
+ * ARRAY_SECTIONS) — same ordering convention Directus's own snapshot
+ * generator uses (sortBy(['collection', 'meta.id']), minus meta.id since we
+ * drop it as volatile). Which keys apply is data on the section, not a
+ * branch here — e.g. collections only ever compare by `collection`.
+ * @param {readonly string[]} identityKeys
+ * @returns {(a: object, b: object) => number}
+ */
+function compareByIdentity(identityKeys) {
+  return (a, b) => {
+    for (const identityKey of identityKeys) {
+      const cmp = String(a[identityKey]).localeCompare(String(b[identityKey]));
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  };
+}
+
+/**
  * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
- * Groups array-section entities by kind, sorted stably by key (hashes have
- * no meaningful order, so this is deterministic output, not original-array-
- * order-preserving — same guarantee the old name-based keys gave). Rebuilds
- * scalar fields (version/directus/vendor) from their "meta:*" entries.
+ * Groups array-section entities by kind, then sorts each group by its
+ * declared identityKeys (collection, or collection+field) — same canonical
+ * order Directus's own snapshot generator produces, making two exported
+ * snapshot.json files diffable by eye/git-diff regardless of the
+ * hash-keyed EntityTree's internal iteration order. Rebuilds scalar fields
+ * (version/directus/vendor) from their "meta:*" entries.
  * @param {import('../normalizers').EntityTree} tree
  * @returns {object} Directus schema shape
  */
 function denormalize(tree) {
-  const grouped = { collection: [], field: [], systemfield: [], relation: [] };
+  const grouped = Object.fromEntries(ARRAY_SECTIONS.map(({ entityLabel }) => [entityLabel, []]));
   const scalars = {};
 
-  const keys = Object.keys(tree).sort();
-  for (const key of keys) {
+  for (const key of Object.keys(tree)) {
     const sepIdx = key.indexOf(':');
-    const kind = key.slice(0, sepIdx);
+    const label = key.slice(0, sepIdx);
     const rest = key.slice(sepIdx + 1);
-    if (kind === 'meta') {
+    if (label === 'meta') {
       scalars[rest] = tree[key];
-    } else if (grouped[kind]) {
-      grouped[kind].push(tree[key]);
+    } else if (grouped[label]) {
+      grouped[label].push(tree[key]);
     }
+  }
+
+  const arraySections = {};
+  for (const { schemaKey, entityLabel, identityKeys } of ARRAY_SECTIONS) {
+    arraySections[schemaKey] = grouped[entityLabel].sort(compareByIdentity(identityKeys));
   }
 
   return {
     data: {
       ...scalars,
-      collections: grouped.collection,
-      fields: grouped.field,
-      systemfields: grouped.systemfield,
-      relations: grouped.relation,
+      ...arraySections,
     },
   };
 }

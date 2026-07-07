@@ -4,6 +4,7 @@
 // "Directory structure" section for the split rule.
 const { Command } = require('commander');
 const config = require('../config');
+const { cmdInit } = require('./commands/init');
 const { cmdNormalize } = require('./commands/normalize');
 const { cmdDiff } = require('./commands/diff');
 const { cmdAdd } = require('./commands/add');
@@ -23,6 +24,20 @@ program
   .description('Normalize + diff Directus schema snapshots')
   .version(pkg.version)
   .option('--env-file <path>', 'path to .env file (default: SCHEMA_SNAPSHOT_ENV_FILE, then cwd/.env — resolved before this option parses, see config.js)');
+
+program
+  .command('init')
+  .description('set up a target directory for first use: writes .env.schema-snapshot, writes .gitignore, initializes the local store — reject if dir already initialized or non-empty')
+  .argument('[dir]', 'target directory to initialize', '.')
+  .option('--out-dir <dir>', 'value written for SCHEMA_SNAPSHOT_OUT_DIR (see Global options)', config.defaultOutDir)
+  .option('--schema-type <type>', 'value written for SCHEMA_SNAPSHOT_TYPE (see Global options)', config.defaultSchemaType)
+  .option('--subdir-format <format>', 'value written for SCHEMA_SNAPSHOT_SUBDIR_FORMAT (see Global options)', config.defaultSubdirFormat)
+  .option('--store-dir <dir>', 'store cache dir, created inside <dir>; also written for SCHEMA_SNAPSHOT_STORE_DIR', config.defaultStoreDir)
+  .option('--store-type <type>', 'which Store implementation to use; also written for SCHEMA_SNAPSHOT_STORE_TYPE (see core/env.js)', config.defaultStoreType)
+  .option('--file-format <format>', 'value written for SCHEMA_SNAPSHOT_FILE_FORMAT (see Global options)', config.defaultFileFormat)
+  .option('--snapshots-dir <dir>', 'value written for SCHEMA_SNAPSHOT_SNAPSHOTS_DIR (see Global options)', config.defaultSnapshotsDir)
+  .option('--json', 'output the init view as JSON (for UI / programmatic use)')
+  .action(cmdInit);
 
 program
   .command('normalize')

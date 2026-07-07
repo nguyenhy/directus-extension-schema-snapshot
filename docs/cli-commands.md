@@ -1,14 +1,14 @@
 # CLI Commands
 
-All commands: `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `sync`, `status`, `extract`.
+All commands: `init`, `normalize`, `diff`, `add`, `list`, `show`, `get`, `remove`, `sync`, `status`, `extract`.
 
 ```bash
 schema-snapshot <command> --help    # authoritative flag list, always up to date
 schema-snapshot --version
-schema-snapshot --env-file <path> <command> ...   # explicit .env path, before default cwd/.env lookup
+schema-snapshot --env-file <path> <command> ...   # explicit env path, before default cwd/.env.schema-snapshot (then cwd/.env) lookup
 ```
 
-**`--env-file <path>`** (env `SCHEMA_SNAPSHOT_ENV_FILE`) — top-level option, not per-command. Pins which `.env` file loads, since dotenv otherwise resolves against `process.cwd()`, which can silently differ from this package's own directory when invoked via a wrapper (e.g. `npm run`). See [reference.md#configuration](./reference.md#configuration).
+**`--env-file <path>`** (env `SCHEMA_SNAPSHOT_ENV_FILE`) — top-level option, not per-command. Pins which env file loads, since dotenv otherwise resolves against `process.cwd()`, which can silently differ from this package's own directory when invoked via a wrapper (e.g. `npm run`). See [reference.md#configuration](./reference.md#configuration).
 
 ## Global options
 
@@ -40,6 +40,68 @@ default: `{time}_{name}`. `normalize`/`extract` only.
 
 **`--cache-ref`**
 default: off. Treat id/hash args as raw GitStore commit shas — see "Which id goes where" (below `list`).
+
+---
+
+## INIT
+
+### NAME
+
+init — scaffold a target directory for first use
+
+### SYNOPSIS
+
+```bash
+schema-snapshot init [dir] [--store-dir <dir>] [--store-type <type>] [--json]
+```
+
+### DESCRIPTION
+
+One-command onboarding: copies the bundled `.env.schema-snapshot.example` template, writes a `.gitignore` entry for the local store cache, and initializes the local GitStore — replaces five manual setup steps (mkdir, copy env template, edit `.gitignore`, `git init` the cache, remember the cwd/.env gotcha) with one.
+
+`dir` defaults to `.` (cwd). `init` rejects if `dir` already looks initialized (`schema-snapshots/` or `.snapshot/` present) or has unrelated content already — see "Reject conditions" below.
+
+**Where `.env.schema-snapshot` goes:** the nearest ancestor directory containing a `package.json`, walking up from `dir` (including `dir` itself) — matching how a user would `cd` into their project root and run commands without `--env-file`. If no `package.json` is found anywhere up the tree, it's written directly into `dir`. The local store cache and `.gitignore` always stay local to `dir`, regardless of where `.env.schema-snapshot` landed.
+
+**Why `.env.schema-snapshot`, not `.env`:**
+- **Isolation** — schema-snapshot's config never mixes with a host app's own env vars.
+- **Prevents accidental overwrite** — `init` can never clobber a `.env` the host project already depends on; if one exists at the resolved root, it's simply untouched.
+- You're still free to consolidate manually — copy the values into your own `.env`, or point `--env-file`/`SCHEMA_SNAPSHOT_ENV_FILE` at whichever file you prefer. `init`'s default is the safe default, not a requirement.
+
+**Why not a JSON/JS config file instead:** deferred, not rejected. `.env` was chosen first because it's the convention every Node dev already expects, and it matches the existing `SCHEMA_SNAPSHOT_*` env-var surface every other command already reads (see [Global options](#global-options) above). A `schema-snapshot.config.json`/`.js` loader can layer on top of this later without breaking it — env vars would still win over config-file values, same precedence `envOr()` already uses today.
+
+**Reject conditions:**
+- `dir` contains `schema-snapshots/` or `.snapshot/` — already initialized; `init` is a one-time setup, not an idempotent sync. Run commands directly instead.
+- `dir` has other real content (not OS junk, not `.env`/`.env.schema-snapshot`/`package.json`) — likely the wrong target; pick an empty dir. `.env`/`package.json` are allowed to preexist since `dir` may legitimately already be a project root.
+
+### OPTIONS
+
+Every flag below is written into the scaffolded `.env.schema-snapshot` as the matching `SCHEMA_SNAPSHOT_*` var (see Global options for what each var controls) — using either the flag's explicit value or its default, so the written file always matches what this run actually used. Ignored (with the file left untouched) if `.env.schema-snapshot` already existed at the resolved env root.
+
+| flag                       | env var written                     |
+| --------------------------- | ------------------------------------ |
+| `[dir]`                    | target directory, default `.` — not written, just where things go |
+| `--out-dir <dir>`          | `SCHEMA_SNAPSHOT_OUT_DIR`            |
+| `--schema-type <type>`     | `SCHEMA_SNAPSHOT_TYPE`               |
+| `--subdir-format <format>` | `SCHEMA_SNAPSHOT_SUBDIR_FORMAT`      |
+| `--store-dir <dir>`        | `SCHEMA_SNAPSHOT_STORE_DIR` (also the local store cache dir, created inside `dir`) |
+| `--store-type <type>`      | `SCHEMA_SNAPSHOT_STORE_TYPE`         |
+| `--file-format <format>`   | `SCHEMA_SNAPSHOT_FILE_FORMAT`        |
+| `--snapshots-dir <dir>`    | `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR`      |
+| `--json`                   | output the init view as JSON (for UI / programmatic use) — not written |
+
+### EXAMPLES
+
+```bash
+schema-snapshot init                                  # scaffold cwd with all defaults
+schema-snapshot init ./my-project                     # scaffold a specific dir
+schema-snapshot init --schema-type directus --out-dir ./out   # override vars written into .env.schema-snapshot
+schema-snapshot init . --json                         # machine-readable result
+```
+
+### SEE ALSO
+
+[reference.md#configuration](./reference.md#configuration)
 
 ---
 

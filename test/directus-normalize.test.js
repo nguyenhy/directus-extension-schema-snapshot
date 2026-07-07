@@ -152,6 +152,26 @@ test('normalize -> denormalize round-trips the full shape (order not guaranteed,
   assert.deepEqual(roundTripped.data.relations, [{ collection: 'orders', field: 'customer' }]);
 });
 
+test('denormalize: sorts each array section by identity (collection, then field), regardless of EntityTree iteration order', () => {
+  const tree = normalize({
+    collections: [{ collection: 'zebras' }, { collection: 'apples' }],
+    fields: [
+      { collection: 'orders', field: 'zzz' },
+      { collection: 'apples', field: 'name' },
+      { collection: 'orders', field: 'aaa' },
+    ],
+    systemFields: [],
+    relations: [],
+  });
+  const raw = denormalize(tree);
+  assert.deepEqual(raw.data.collections, [{ collection: 'apples' }, { collection: 'zebras' }]);
+  assert.deepEqual(raw.data.fields, [
+    { collection: 'apples', field: 'name' },
+    { collection: 'orders', field: 'aaa' },
+    { collection: 'orders', field: 'zzz' },
+  ]);
+});
+
 test('normalize: identity-only key means "removed field X, added new field Y" is detected correctly (not as one giant modified)', () => {
   const v1 = normalize({ fields: [{ collection: 'orders', field: 'status', type: 'string' }, { collection: 'orders', field: 'legacy_flag', type: 'boolean' }] });
   const v2 = normalize({ fields: [{ collection: 'orders', field: 'status', type: 'enum' }, { collection: 'orders', field: 'tracking_number', type: 'string' }] });

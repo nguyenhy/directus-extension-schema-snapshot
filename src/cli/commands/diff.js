@@ -40,6 +40,10 @@ async function cmdDiff(a, b, options) {
   const resolveOpts = { snapshotsDir: options.snapshotsDir, store, cacheRef: options.cacheRef, versions };
   const [resolvedA, resolvedB] = await Promise.all([resolveArgOrFile(a, resolveOpts), resolveArgOrFile(b, resolveOpts)]);
 
+  if (options.show && options.snapshot) {
+    throw new Error('--show and --snapshot are mutually exclusive');
+  }
+
   let snapshotMode, snapshotFile;
   if (options.snapshot) {
     if (options.snapshot.length > 2) {

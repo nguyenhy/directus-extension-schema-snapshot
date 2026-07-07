@@ -155,7 +155,7 @@ async function diffSchemas({ a, b, schemaType, store, parse, show, snapshotMode,
     throw new SchemaSnapshotError(`Schema normalizer "${schemaType}" does not support rebuilding snapshots.`);
   }
 
-  const dir = runSubDir(outDir, `${a}_${b}`, subdirFormat, { ref1: refA, ref2: refB, mode });
+  const dir = snapshotFile ? undefined : runSubDir(outDir, `${a}_${b}`, subdirFormat, { ref1: refA, ref2: refB, mode });
   const meta = buildExtractMeta(tree, a, b, mode);
   const mergedTree = mergeIntoOld(treeOld, tree, mode);
   const verification = verifyMerge(treeOld, mergedTree, result, mode);
@@ -175,7 +175,7 @@ async function diffSchemas({ a, b, schemaType, store, parse, show, snapshotMode,
       : snapshotFile + '.meta.json';
     fs.writeFile(metaFile, JSON.stringify(meta, null, 2) + '\n');
 
-    return { dryRun: false, view: buildExtractView(keys, mode, parentDir), tree, file: snapshotFile, isSnapshot: true, verification };
+    return { dryRun: false, view: buildExtractView(keys, mode, parentDir, snapshotFile), tree, file: snapshotFile, isSnapshot: true, verification };
   }
 
   fs.mkdir(dir);

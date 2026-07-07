@@ -19,10 +19,10 @@ const VOLATILE_KEYS = new Set(['id', 'date_created', 'date_updated', 'user_creat
  * Directus's own casing.
  */
 const ARRAY_SECTIONS = /** @type {const} */ ([
-  { schemaKey: 'collections', entityLabel: 'collection' },
-  { schemaKey: 'fields', entityLabel: 'field' },
-  { schemaKey: 'systemFields', entityLabel: 'systemfield' },
-  { schemaKey: 'relations', entityLabel: 'relation' },
+  { schemaKey: 'collections', entityLabel: 'collection', identityKeys: ['collection'] },
+  { schemaKey: 'fields', entityLabel: 'field', identityKeys: ['collection', 'field'] },
+  { schemaKey: 'systemFields', entityLabel: 'systemfield', identityKeys: ['collection', 'field'] },
+  { schemaKey: 'relations', entityLabel: 'relation', identityKeys: ['collection', 'field'] },
 ]);
 
 /** schemaKey -> entityLabel, e.g. entityKey()'s ARRAY_SECTIONS lookup. */
@@ -127,30 +127,32 @@ function normalize(rawSchema) {
 }
 
 /**
- * Compares two entities by identity (collection, or collection+field) —
- * same ordering convention Directus's own snapshot generator uses
- * (sortBy(['collection', 'meta.id']), minus meta.id since we drop it as
- * volatile). `collection`-only entities (entityLabel 'collection') have no
- * `field`, so the second key is never compared for them.
- * @param {string} entityLabel
+ * Compares two entities by a section's declared `identityKeys` (see
+ * ARRAY_SECTIONS) — same ordering convention Directus's own snapshot
+ * generator uses (sortBy(['collection', 'meta.id']), minus meta.id since we
+ * drop it as volatile). Which keys apply is data on the section, not a
+ * branch here — e.g. collections only ever compare by `collection`.
+ * @param {readonly string[]} identityKeys
  * @returns {(a: object, b: object) => number}
  */
-function compareByIdentity(entityLabel) {
+function compareByIdentity(identityKeys) {
   return (a, b) => {
-    const byCollection = String(a.collection).localeCompare(String(b.collection));
-    if (byCollection !== 0 || entityLabel === 'collection') return byCollection;
-    return String(a.field).localeCompare(String(b.field));
+    for (const identityKey of identityKeys) {
+      const cmp = String(a[identityKey]).localeCompare(String(b[identityKey]));
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
   };
 }
 
 /**
  * Denormalizes an EntityTree back into a raw Directus schema snapshot format.
- * Groups array-section entities by kind, then sorts each group by identity
- * (collection, or collection+field) — same canonical order Directus's own
- * snapshot generator produces, making two exported snapshot.json files
- * diffable by eye/git-diff regardless of the hash-keyed EntityTree's
- * internal iteration order. Rebuilds scalar fields (version/directus/vendor)
- * from their "meta:*" entries.
+ * Groups array-section entities by kind, then sorts each group by its
+ * declared identityKeys (collection, or collection+field) — same canonical
+ * order Directus's own snapshot generator produces, making two exported
+ * snapshot.json files diffable by eye/git-diff regardless of the
+ * hash-keyed EntityTree's internal iteration order. Rebuilds scalar fields
+ * (version/directus/vendor) from their "meta:*" entries.
  * @param {import('../normalizers').EntityTree} tree
  * @returns {object} Directus schema shape
  */
@@ -169,13 +171,10 @@ function denormalize(tree) {
     }
   }
 
-  for (const { entityLabel } of ARRAY_SECTIONS) {
-    grouped[entityLabel].sort(compareByIdentity(entityLabel));
+  const arraySections = {};
+  for (const { schemaKey, entityLabel, identityKeys } of ARRAY_SECTIONS) {
+    arraySections[schemaKey] = grouped[entityLabel].sort(compareByIdentity(identityKeys));
   }
-
-  const arraySections = Object.fromEntries(
-    ARRAY_SECTIONS.map(({ schemaKey, entityLabel }) => [schemaKey, grouped[entityLabel]]),
-  );
 
   return {
     data: {

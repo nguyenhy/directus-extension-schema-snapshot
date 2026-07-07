@@ -76,14 +76,14 @@ test('normalize: attacker-controlled collection name never becomes a raw path-un
   assert.equal(tree[key].collection, '../../../etc/passwd');
 });
 
-test('normalize: captures systemfields array and scalar version/directus/vendor fields', () => {
+test('normalize: captures systemFields array and scalar version/directus/vendor fields', () => {
   const tree = normalize({
     version: 1,
     directus: '10.0.0',
     vendor: 'postgres',
     collections: [],
     fields: [],
-    systemfields: [{ collection: 'orders', field: 'id' }],
+    systemFields: [{ collection: 'orders', field: 'id' }],
     relations: [],
   });
   assert.deepEqual(tree, {
@@ -116,7 +116,7 @@ test('denormalize: builds raw Directus schema format from EntityTree', () => {
     data: {
       collections: [{ collection: 'orders' }],
       fields: [{ collection: 'orders', field: 'status' }],
-      systemfields: [],
+      systemFields: [],
       relations: [{ collection: 'orders', field: 'customer' }],
     },
   });
@@ -138,7 +138,7 @@ test('normalize -> denormalize round-trips the full shape (order not guaranteed,
       vendor: 'postgres',
       collections: [{ collection: 'orders' }, { collection: 'customers' }],
       fields: [{ collection: 'orders', field: 'status' }],
-      systemfields: [{ collection: 'orders', field: 'id' }],
+      systemFields: [{ collection: 'orders', field: 'id' }],
       relations: [{ collection: 'orders', field: 'customer' }],
     },
   };
@@ -148,7 +148,7 @@ test('normalize -> denormalize round-trips the full shape (order not guaranteed,
   assert.equal(roundTripped.data.vendor, 'postgres');
   assert.deepEqual(new Set(roundTripped.data.collections.map((c) => c.collection)), new Set(['orders', 'customers']));
   assert.deepEqual(roundTripped.data.fields, [{ collection: 'orders', field: 'status' }]);
-  assert.deepEqual(roundTripped.data.systemfields, [{ collection: 'orders', field: 'id' }]);
+  assert.deepEqual(roundTripped.data.systemFields, [{ collection: 'orders', field: 'id' }]);
   assert.deepEqual(roundTripped.data.relations, [{ collection: 'orders', field: 'customer' }]);
 });
 

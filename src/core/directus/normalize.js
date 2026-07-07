@@ -67,7 +67,10 @@ function stripVolatile(value) {
  * @returns {object}
  */
 function entityIdentity(schemaKey, item) {
-  return schemaKey === 'collections' ? { collection: item.collection } : { collection: item.collection, field: item.field };
+  const section = ARRAY_SECTIONS.find((s) => s.schemaKey === schemaKey);
+  const identity = {};
+  for (const key of section.identityKeys) identity[key] = item[key];
+  return identity;
 }
 
 /**

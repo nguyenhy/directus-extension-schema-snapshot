@@ -1,12 +1,26 @@
 const path = require('path');
 const fs = require('../platform/fs');
-const { EventNotFoundError, SourceNotFoundError } = require('../errors');
+const { EventNotFoundError, SourceNotFoundError, SourceHashCollisionError } = require('../errors');
 
 // schema-snapshots/ layout (see docs/proposal-schema-snapshot-sync.md §2):
-//   meta.json          <- this module's event log
-//   source/<hash>.json <- content-addressed raw source, written by appendAddEvent
+//   meta.json                  <- this module's event log (stores the FULL hash per event)
+//   source/<hash16>.json       <- content-addressed raw source, written by appendAddEvent
 const META_FILE = 'meta.json';
 const SOURCE_DIR = 'source';
+
+// Length of the hash prefix used for source/*.json filenames — shorter than
+// the full contentHash() for readability, but this is content-addressed
+// across the ENTIRE repo's history (every add, every device, forever), a
+// much bigger collision domain than e.g. entityKey()'s per-tree hash. 16 hex
+// chars (64 bits) keeps collision odds negligible; sourceFileHash() below
+// still hard-fails on an actual collision rather than silently corrupting
+// or skipping a write.
+const SOURCE_FILE_HASH_LENGTH = 16;
+
+/** @param {string} hash - full contentHash() hex string @returns {string} */
+function sourceFileHash(hash) {
+  return hash.slice(0, SOURCE_FILE_HASH_LENGTH);
+}
 
 /**
  * Reads the event log from `<dir>/meta.json`. Returns an empty log if the
@@ -85,9 +99,22 @@ function activeAddEvents(log) {
  * @returns {object} the appended event
  */
 function appendAddEvent(dir, log, { hash, raw, message }) {
+  // Truncated-hash collision guard: a different full hash landing on the
+  // same shortened filename would otherwise overwrite/shadow the wrong
+  // source file — check the log's own record of full hashes (every add
+  // event stores its full hash already) before trusting the short name.
+  const prefix = sourceFileHash(hash);
+  const collision = log.events.find((e) => e.type === 'add' && e.hash !== hash && sourceFileHash(e.hash) === prefix);
+  if (collision) {
+    throw new SourceHashCollisionError(
+      `Hash prefix collision: "${hash}" and "${collision.hash}" both truncate to "${prefix}" — ` +
+        'increase SOURCE_FILE_HASH_LENGTH in eventLog.js (extremely rare; if this happens, the repo history is large enough to need it)'
+    );
+  }
+
   const sourceDir = path.join(dir, SOURCE_DIR);
   fs.mkdir(sourceDir);
-  const sourcePath = path.join(sourceDir, `${hash}.json`);
+  const sourcePath = path.join(sourceDir, `${prefix}.json`);
   if (!fs.exists(sourcePath)) {
     fs.writeFile(sourcePath, JSON.stringify(raw, null, 2));
   }
@@ -148,7 +175,7 @@ function appendRemoveEventById(log, targetId) {
  * @throws {Error} if the source file is missing
  */
 function readSource(dir, hash) {
-  const sourcePath = path.join(dir, SOURCE_DIR, `${hash}.json`);
+  const sourcePath = path.join(dir, SOURCE_DIR, `${sourceFileHash(hash)}.json`);
   if (!fs.exists(sourcePath)) throw new SourceNotFoundError(`No source file for hash "${hash}"`);
   return JSON.parse(fs.readFile(sourcePath));
 }

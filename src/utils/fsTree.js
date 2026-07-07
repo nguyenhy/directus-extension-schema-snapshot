@@ -2,38 +2,44 @@ const path = require('path');
 const fs = require('../core/platform/fs');
 const { timestamp } = require('./timestamp');
 const { InvalidSubdirFormatError } = require('../core/errors');
+const { isValidFilename } = require('../core/hash');
 
-/** Placeholders recognized in a subdir format template, see runSubDir(). */
+/** Base placeholders recognized in every subdir format template, see runSubDir(). */
 const SUBDIR_PLACEHOLDERS = { name: 'basename of the input file (no extension)', time: 'YYYYMMDD-HHmmss' };
 
 /**
- * Builds a unique subdir path for one normalize run from a format template,
- * so repeated runs never collide/overwrite each other. Full documentation
+ * Builds a unique subdir path for one run from a format template, so
+ * repeated runs never collide/overwrite each other. Full documentation
  * (placeholders, examples, validation rules): docs/architecture.md#subdir-format.
  * @param {string} outDir - parent directory (default or --out-dir)
- * @param {string} inputPath - path to the input file being normalized
- * @param {string} format - template string using {name} and {time}
- *   placeholders, e.g. "{time}_{name}" (default) or "{name}/{time}" for a
- *   nested-by-input layout.
+ * @param {string} inputPath - path to the input file (for the {name} placeholder)
+ * @param {string} format - template string using {name}/{time} plus any key
+ *   from `extraValues`, e.g. "{time}_{name}" (normalize's default) or
+ *   "{time}_{ref1}_{ref2}_{mode}" (diff/extract's default).
+ * @param {Object.<string, string>} [extraValues] - caller-supplied
+ *   placeholders on top of {name}/{time} — e.g. diff/extract pass
+ *   { ref1, ref2, mode } so a run's subdir names what was actually diffed,
+ *   not just when.
  * @returns {string} "<outDir>/<rendered template>"
  * @throws {Error} if the template contains no placeholders, references an
  *   unknown placeholder, or renders to an unsafe path (any segment empty,
  *   "." or ".." — ".." specifically would let the rendered path escape
  *   outDir, which defeats the "always a fresh subdir" guarantee)
  */
-function runSubDir(outDir, inputPath, format) {
+function runSubDir(outDir, inputPath, format, extraValues = {}) {
   const values = {
     name: path.basename(inputPath, path.extname(inputPath)),
     time: timestamp(),
+    ...extraValues,
   };
 
   const usedPlaceholders = [...format.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
   if (usedPlaceholders.length === 0) {
-    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": must use at least one of {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+    throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": must use at least one of {${Object.keys(values).join('}, {')}}`);
   }
   for (const key of usedPlaceholders) {
     if (!(key in values)) {
-      throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(SUBDIR_PLACEHOLDERS).join('}, {')}}`);
+      throw new InvalidSubdirFormatError(`Invalid subdir format "${format}": unknown placeholder {${key}}. Available: {${Object.keys(values).join('}, {')}}`);
     }
   }
 
@@ -47,22 +53,44 @@ function runSubDir(outDir, inputPath, format) {
 }
 
 /**
+ * Picks the on-disk filename (no extension) for one entity: its own
+ * "collection" / "collection.field" identity when that's a safe path
+ * segment (isValidFilename), falling back to the hash half of its key
+ * otherwise. `kind === 'meta'` entries are never hash-keyed (their key's
+ * second half is already the human name, e.g. "meta:version") so they pass
+ * through untouched.
+ * @param {string} kind
+ * @param {string} hashOrName - second half of the entity key
+ * @param {*} value - the entity's own (stripVolatile'd) content
+ * @returns {string}
+ */
+function fileNameFor(kind, hashOrName, value) {
+  if (kind === 'meta') return hashOrName;
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const identity = 'field' in value ? `${value.collection}.${value.field}` : ('collection' in value ? value.collection : null);
+    if (identity && isValidFilename(identity)) return identity;
+  }
+  return hashOrName;
+}
+
+/**
  * Builds the "map.json" sidecar: entity key -> its identifying fields
- * (collection/field), pulled from the entity's own value. Keys are
- * content-hash-based ("field:9a01de...") since core/directus/normalize.js's
- * entityKey() change, so this file is what makes a written tree
- * human-navigable without needing to open every entity file to find
- * "which one is orders.status".
+ * (collection/field) plus the actual filename chosen for it (see
+ * fileNameFor()) — since a key's hash half no longer always equals the
+ * filename, map.json is also what readTreeFromDir() uses to invert
+ * filename -> key for hash-keyed kinds.
  * @param {import('../core/normalizers').EntityTree} tree
- * @returns {Object.<string, {collection?: string, field?: string}>}
+ * @returns {Object.<string, {collection?: string, field?: string, file: string}>}
  */
 function buildKeyMap(tree) {
-  /** @type {Object.<string, {collection?: string, field?: string}>} */
+  /** @type {Object.<string, {collection?: string, field?: string, file: string}>} */
   const map = {};
   for (const key of Object.keys(tree)) {
+    const [kind, hashOrName] = key.split(':');
+    if (kind === 'meta') continue;
     const value = tree[key];
     if (value && typeof value === 'object' && !Array.isArray(value) && ('collection' in value || 'field' in value)) {
-      const entry = {};
+      const entry = { file: fileNameFor(kind, hashOrName, value) };
       if ('collection' in value) entry.collection = value.collection;
       if ('field' in value) entry.field = value.field;
       map[key] = entry;
@@ -73,22 +101,22 @@ function buildKeyMap(tree) {
 
 /**
  * Writes a normalize()-output tree to disk as one file per entity, plus a
- * map.json sidecar (see buildKeyMap()).
- * GOTCHA: relies on entityKey()'s "kind:hash" format (see core/directus/normalize.js)
- * — splits each key on ":" to derive the subdirectory ("kind") and filename
- * ("hash"). The hash half is a content hash of the entity's identity,
- * never the raw attacker-controlled field content, so it's always a safe
- * fixed-charset string to use directly as a path segment.
+ * map.json sidecar (see buildKeyMap()). Filenames prefer the entity's own
+ * "collection"/"collection.field" identity (fileNameFor()) — falling back
+ * to the hash half of the key only when that identity isn't a safe path
+ * segment (attacker-controlled collection/field content).
  * @param {import('../core/normalizers').EntityTree} tree - normalize() output
  * @param {string} dir - target directory (created if missing)
  */
 function writeTreeToDir(tree, dir) {
   for (const key of Object.keys(tree)) {
-    const [kind, name] = key.split(':');
+    const [kind, hashOrName] = key.split(':');
     const kindDir = path.join(dir, kind);
     fs.mkdir(kindDir);
-    const file = path.join(kindDir, `${name}.json`);
-    fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
+    const value = tree[key];
+    const fileName = fileNameFor(kind, hashOrName, value);
+    const file = path.join(kindDir, `${fileName}.json`);
+    fs.writeFile(file, JSON.stringify(value, null, 2) + '\n');
   }
   const map = buildKeyMap(tree);
   if (Object.keys(map).length > 0) {
@@ -102,21 +130,35 @@ function writeTreeToDir(tree, dir) {
  * before" without needing a separate stored copy (e.g. GitStore reads the
  * working dir's current content, right before overwriting it, to diff
  * against the incoming version).
+ * GOTCHA: hash-keyed kinds (everything but "meta") no longer have a
+ * filename == key.split(':')[1] guarantee (see fileNameFor()), so those are
+ * read via map.json's `file` field, not directory listing. "meta" kind has
+ * no map.json entries (its filename always equals the key's name half) so
+ * it's still read via plain directory listing.
  * @param {string} dir - directory previously written by writeTreeToDir()
  * @returns {import('../core/normalizers').EntityTree} empty object if dir doesn't exist yet
  */
 function readTreeFromDir(dir) {
   const tree = {};
   if (!fs.exists(dir)) return tree;
-  for (const kind of fs.readdir(dir)) {
-    const kindDir = path.join(dir, kind);
-    if (!fs.isDirectory(kindDir)) continue;
-    for (const file of fs.readdir(kindDir)) {
+
+  const mapPath = path.join(dir, 'map.json');
+  const map = fs.exists(mapPath) ? JSON.parse(fs.readFile(mapPath)) : {};
+  for (const key of Object.keys(map)) {
+    const kind = key.split(':')[0];
+    const file = path.join(dir, kind, `${map[key].file}.json`);
+    if (fs.exists(file)) tree[key] = JSON.parse(fs.readFile(file));
+  }
+
+  const metaDir = path.join(dir, 'meta');
+  if (fs.exists(metaDir) && fs.isDirectory(metaDir)) {
+    for (const file of fs.readdir(metaDir)) {
       if (!file.endsWith('.json')) continue;
       const name = file.slice(0, -'.json'.length);
-      tree[`${kind}:${name}`] = JSON.parse(fs.readFile(path.join(kindDir, file)));
+      tree[`meta:${name}`] = JSON.parse(fs.readFile(path.join(metaDir, file)));
     }
   }
+
   return tree;
 }
 
@@ -125,8 +167,9 @@ function readTreeFromDir(dir) {
  * changed relative to `previousTree` — writes added/modified entities,
  * deletes removed ones, leaves unchanged ones untouched. Used by
  * GitStore.set() so a commit's file I/O is proportional to the diff size,
- * not to the full tree size (see writeTreeToDir()'s GOTCHA re: key format,
- * which applies here too).
+ * not to the full tree size (see writeTreeToDir()'s GOTCHA re: filenames,
+ * which applies here too — old entities' filenames are recomputed from
+ * `previousTree`'s still-in-memory value, not re-derived from disk).
  * @param {import('../core/normalizers').EntityTree} tree - new tree to write
  * @param {import('../core/normalizers').EntityTree} previousTree - tree
  *   currently on disk (as read by readTreeFromDir()), used to skip
@@ -139,18 +182,21 @@ function writeTreeDelta(tree, previousTree, dir) {
 
   for (const key of oldKeys) {
     if (newKeys.has(key)) continue;
-    const [kind, name] = key.split(':');
-    const file = path.join(dir, kind, `${name}.json`);
+    const [kind, hashOrName] = key.split(':');
+    const fileName = fileNameFor(kind, hashOrName, previousTree[key]);
+    const file = path.join(dir, kind, `${fileName}.json`);
     if (fs.exists(file)) fs.remove(file, { force: true });
   }
 
   for (const key of newKeys) {
     if (JSON.stringify(previousTree[key]) === JSON.stringify(tree[key])) continue;
-    const [kind, name] = key.split(':');
+    const [kind, hashOrName] = key.split(':');
     const kindDir = path.join(dir, kind);
     fs.mkdir(kindDir);
-    const file = path.join(kindDir, `${name}.json`);
-    fs.writeFile(file, JSON.stringify(tree[key], null, 2) + '\n');
+    const value = tree[key];
+    const fileName = fileNameFor(kind, hashOrName, value);
+    const file = path.join(kindDir, `${fileName}.json`);
+    fs.writeFile(file, JSON.stringify(value, null, 2) + '\n');
   }
 
   const mapPath = path.join(dir, 'map.json');
@@ -168,4 +214,4 @@ function writeTreeDelta(tree, previousTree, dir) {
   }
 }
 
-module.exports = { runSubDir, writeTreeToDir, writeTreeDelta, readTreeFromDir, buildKeyMap, SUBDIR_PLACEHOLDERS };
+module.exports = { runSubDir, writeTreeToDir, writeTreeDelta, readTreeFromDir, buildKeyMap, SUBDIR_PLACEHOLDERS, fileNameFor };

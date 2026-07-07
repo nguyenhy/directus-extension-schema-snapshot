@@ -3,15 +3,18 @@ const { test } = require('node:test');
 const { normalize, stripVolatile, entityKey, denormalize } = require('../src/core/directus/normalize');
 const { contentHash } = require('../src/core/hash');
 
+/** entityKey() truncates contentHash() to 12 hex chars — see normalize.js. */
+const hash12 = (value) => contentHash(value).slice(0, 12);
+
 test('entityKey: builds "kind:hash" for each known array kind, hash derived from identity fields only', () => {
-  assert.equal(entityKey('collections', { collection: 'orders' }), `collection:${contentHash({ collection: 'orders' })}`);
+  assert.equal(entityKey('collections', { collection: 'orders' }), `collection:${hash12({ collection: 'orders' })}`);
   assert.equal(
     entityKey('fields', { collection: 'orders', field: 'status', type: 'string' }),
-    `field:${contentHash({ collection: 'orders', field: 'status' })}`
+    `field:${hash12({ collection: 'orders', field: 'status' })}`
   );
   assert.equal(
     entityKey('relations', { collection: 'orders', field: 'customer' }),
-    `relation:${contentHash({ collection: 'orders', field: 'customer' })}`
+    `relation:${hash12({ collection: 'orders', field: 'customer' })}`
   );
 });
 
@@ -60,8 +63,8 @@ test('normalize: builds flat EntityTree from bare {collections, fields, relation
     relations: [],
   });
   assert.deepEqual(tree, {
-    [`collection:${contentHash({ collection: 'orders' })}`]: { collection: 'orders' },
-    [`field:${contentHash({ collection: 'orders', field: 'status' })}`]: { collection: 'orders', field: 'status' },
+    [`collection:${hash12({ collection: 'orders' })}`]: { collection: 'orders' },
+    [`field:${hash12({ collection: 'orders', field: 'status' })}`]: { collection: 'orders', field: 'status' },
   });
 });
 
@@ -76,28 +79,28 @@ test('normalize: attacker-controlled collection name never becomes a raw path-un
   assert.equal(tree[key].collection, '../../../etc/passwd');
 });
 
-test('normalize: captures systemfields array and scalar version/directus/vendor fields', () => {
+test('normalize: captures systemFields array and scalar version/directus/vendor fields', () => {
   const tree = normalize({
     version: 1,
     directus: '10.0.0',
     vendor: 'postgres',
     collections: [],
     fields: [],
-    systemfields: [{ collection: 'orders', field: 'id' }],
+    systemFields: [{ collection: 'orders', field: 'id' }],
     relations: [],
   });
   assert.deepEqual(tree, {
     'meta:version': 1,
     'meta:directus': '10.0.0',
     'meta:vendor': 'postgres',
-    [`systemfield:${contentHash({ collection: 'orders', field: 'id' })}`]: { collection: 'orders', field: 'id' },
+    [`systemfield:${hash12({ collection: 'orders', field: 'id' })}`]: { collection: 'orders', field: 'id' },
   });
 });
 
 test('normalize: accepts { data: {...} } wrapped shape identically', () => {
   const raw = { data: { collections: [{ id: 1, collection: 'orders' }], fields: [], relations: [] } };
   const tree = normalize(raw);
-  assert.deepEqual(tree, { [`collection:${contentHash({ collection: 'orders' })}`]: { collection: 'orders' } });
+  assert.deepEqual(tree, { [`collection:${hash12({ collection: 'orders' })}`]: { collection: 'orders' } });
 });
 
 test('normalize: non-Directus JSON returns {} (no matching sections/scalars found)', () => {
@@ -116,7 +119,7 @@ test('denormalize: builds raw Directus schema format from EntityTree', () => {
     data: {
       collections: [{ collection: 'orders' }],
       fields: [{ collection: 'orders', field: 'status' }],
-      systemfields: [],
+      systemFields: [],
       relations: [{ collection: 'orders', field: 'customer' }],
     },
   });
@@ -138,7 +141,7 @@ test('normalize -> denormalize round-trips the full shape (order not guaranteed,
       vendor: 'postgres',
       collections: [{ collection: 'orders' }, { collection: 'customers' }],
       fields: [{ collection: 'orders', field: 'status' }],
-      systemfields: [{ collection: 'orders', field: 'id' }],
+      systemFields: [{ collection: 'orders', field: 'id' }],
       relations: [{ collection: 'orders', field: 'customer' }],
     },
   };
@@ -148,8 +151,28 @@ test('normalize -> denormalize round-trips the full shape (order not guaranteed,
   assert.equal(roundTripped.data.vendor, 'postgres');
   assert.deepEqual(new Set(roundTripped.data.collections.map((c) => c.collection)), new Set(['orders', 'customers']));
   assert.deepEqual(roundTripped.data.fields, [{ collection: 'orders', field: 'status' }]);
-  assert.deepEqual(roundTripped.data.systemfields, [{ collection: 'orders', field: 'id' }]);
+  assert.deepEqual(roundTripped.data.systemFields, [{ collection: 'orders', field: 'id' }]);
   assert.deepEqual(roundTripped.data.relations, [{ collection: 'orders', field: 'customer' }]);
+});
+
+test('denormalize: sorts each array section by identity (collection, then field), regardless of EntityTree iteration order', () => {
+  const tree = normalize({
+    collections: [{ collection: 'zebras' }, { collection: 'apples' }],
+    fields: [
+      { collection: 'orders', field: 'zzz' },
+      { collection: 'apples', field: 'name' },
+      { collection: 'orders', field: 'aaa' },
+    ],
+    systemFields: [],
+    relations: [],
+  });
+  const raw = denormalize(tree);
+  assert.deepEqual(raw.data.collections, [{ collection: 'apples' }, { collection: 'zebras' }]);
+  assert.deepEqual(raw.data.fields, [
+    { collection: 'apples', field: 'name' },
+    { collection: 'orders', field: 'aaa' },
+    { collection: 'orders', field: 'zzz' },
+  ]);
 });
 
 test('normalize: identity-only key means "removed field X, added new field Y" is detected correctly (not as one giant modified)', () => {

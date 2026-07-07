@@ -112,6 +112,18 @@ function runStoreContractTests(label, makeStore) {
     assert.deepEqual(await store.get(id), { 'collection:a': { collection: 'a' } });
   });
 
+  test(`${label}: get() recovers the real key even when it differs from the identity-based filename`, async () => {
+    // Regression test: fileNameFor() (src/utils/fsTree.js) prefers a human
+    // filename ("buyer") over the entity key's hash half ("f6941c6826e8")
+    // when the identity is a safe path segment. get() must still hand back
+    // the ORIGINAL key, not one derived from the filename it happens to see
+    // on disk/in git — otherwise diff() thinks it's a different entity.
+    const store = makeStore();
+    const tree = { 'collection:f6941c6826e8': { collection: 'buyer' } };
+    const { id } = await store.set(tree, 'first');
+    assert.deepEqual(await store.get(id), tree);
+  });
+
   test(`${label}: reset() wipes all history, store usable immediately after`, async () => {
     const store = makeStore();
     await store.set({ 'collection:a': { collection: 'a' } }, 'first');

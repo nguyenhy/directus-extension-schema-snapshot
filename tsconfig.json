@@ -6,5 +6,8 @@
     "outDir": "types",
     "rootDir": "src"
   },
-  "include": ["src/index.js", "src/core/**/*.js"]
+  "include": [
+    "src/index.js",
+    "src/core/**/*.js"
+  ]
 }

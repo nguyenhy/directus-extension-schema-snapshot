@@ -3,5 +3,9 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/index.js", "src/core/**/*.js", "test/types/**/*.ts"]
+  "include": [
+    "src/index.js",
+    "src/core/**/*.js",
+    "test/types/**/*.ts"
+  ]
 }

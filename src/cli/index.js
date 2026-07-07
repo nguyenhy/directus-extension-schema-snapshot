@@ -61,6 +61,11 @@ program
   .option('--file-format <format>', 'which Parser to use for file args (see core/parsers/index.js)', config.defaultFileFormat)
   .option('--snapshots-dir <dir>', 'host-repo-tracked event log + source dir, used to resolve event id/hash args (see docs/proposal-schema-snapshot-sync.md)', config.defaultSnapshotsDir)
   .option('--cache-ref', 'treat non-file args as raw GitStore commit shas instead of event id/hash (debug/special-case)')
+  .option('--show <mode>', 'filter the diff to one category: "added", "removed", or "modified" — view only, never writes')
+  .option('--snapshot <mode...>', 'write a full Directus snapshot for one category: "added", "removed", or "modified"; optionally pass an output file path as the 2nd value (default: fresh subdir of --out-dir). Writes immediately; pass --dry-run to preview instead. Replaces the deprecated `extract` command.')
+  .option('--dry-run', 'preview --snapshot output without writing anything')
+  .option('--out-dir <dir>', 'used with --snapshot: write to a fresh subdir of this directory when no output file is given', config.defaultOutDir)
+  .option('--subdir-format <format>', 'used with --snapshot: template for the run subdir name, e.g. "{time}_{name}"', config.defaultSubdirFormat)
   .option('--json', 'output the diff view as JSON (for UI / programmatic use)')
   .action(cmdDiff);
 
@@ -145,7 +150,10 @@ program
 
 program
   .command('extract')
-  .description('extract a partial snapshot of only added or only removed entities between two schemas')
+  .description([
+    'extract a partial snapshot of only added or only removed entities between two schemas',
+    '[deprecated, use `diff --snapshot <mode> [outFile]`]'
+  ].join('\n'))
   .argument('<old>', 'older schema: file path, event id ("e3"), or content hash from `list`')
   .argument('<new>', 'newer schema: file path, event id ("e3"), or content hash from `list`')
   .requiredOption('--mode <mode>', 'which part of the diff to extract: "added", "removed", or "modified"')

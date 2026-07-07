@@ -28,6 +28,7 @@ const { printExtractView, printVerification } = require('../render/extract');
  * @param {{mode: 'added'|'removed'|'modified', schemaType: string, storeDir: string, storeType: string, fileFormat: string, snapshotsDir: string, cacheRef?: boolean, outDir: string, subdirFormat: string, dryRun?: boolean, json?: boolean, snapshot?: boolean, snapshotFile?: string}} options
  */
 async function cmdExtract(oldSchema, newSchema, options) {
+  console.error('Warning: `extract` is deprecated, use `diff <a> <b> --snapshot <mode> [outFile]` instead.');
   const { store, parse } = createEnv({ storeDir: options.storeDir, storeType: options.storeType, fileFormat: options.fileFormat });
 
   // Fetch store.list() once and share it — see cmdDiff's identical note.

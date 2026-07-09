@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.3.0...v1.3.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* render diff result in original key instead of hash value ([ad3dc0f](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/ad3dc0fd497a334b98723b35ba983a64f237ca20))
+
 # [1.3.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.2.1...v1.3.0) (2026-07-07)
 
 

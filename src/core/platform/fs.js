@@ -25,6 +25,11 @@ function writeFile(p, content) {
   fs.writeFileSync(p, content);
 }
 
+/** @param {string} p @param {string} content */
+function appendFile(p, content) {
+  fs.appendFileSync(p, content);
+}
+
 /** @param {string} src @param {string} dest */
 function copyFile(src, dest) {
   fs.copyFileSync(src, dest);
@@ -40,4 +45,4 @@ function isDirectory(p) {
   return fs.statSync(p).isDirectory();
 }
 
-module.exports = { exists, mkdir, remove, readFile, writeFile, copyFile, readdir, isDirectory };
+module.exports = { exists, mkdir, remove, readFile, writeFile, appendFile, copyFile, readdir, isDirectory };

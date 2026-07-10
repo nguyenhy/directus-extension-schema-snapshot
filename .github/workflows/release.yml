@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '>=22.14.0'
-      - run: npm install -g npm@11.18.0
+      - run: corepack enable && corepack install
       - run: npm ci
       # semantic-release detects OIDC automatically if NPM_TOKEN is absent
       - run: npx semantic-release

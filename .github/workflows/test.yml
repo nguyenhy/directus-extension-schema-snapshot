@@ -25,7 +25,7 @@ jobs:
           node-version: '>=22.14.0'
           cache: npm
 
-      - run: npm install -g npm@11.18.0
+      - run: corepack enable && corepack install
       - run: npm ci
 
       - name: Configure git identity for GitStore tests

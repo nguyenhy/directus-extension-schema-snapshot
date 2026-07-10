@@ -1,3 +1,18 @@
+# [1.4.0](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.3.1...v1.4.0) (2026-07-10)
+
+
+### Bug Fixes
+
+* move top-level permission to `jobs.release` only ([87eb444](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/87eb4443ae5b41655f0964e51bb20a2abcd273d8))
+* setup to use `corepack` with `npm@11.18.0` ([5c7d202](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/5c7d202eba3720a4a0d63cdba07432c9370885d8))
+* use new release workflow to remove non-2fa `NPM_TOKEN` ([24ce86a](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/24ce86a1d4e28eca563879e883661faa6792c477))
+
+
+### Features
+
+* pin `npm@11.18.0` and `node 22.14.0` to meet requirement for trusted publishing for npm packages ([10405c8](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/10405c896835220eaee65c3a3c87294b848c8fcb))
+* use at least `22.14.0` for workflow ([ffd5540](https://github.com/nguyenhy/directus-extension-schema-snapshot/commit/ffd5540cc655e3af821379c12e5ba51a2097e5e5))
+
 ## [1.3.1](https://github.com/nguyenhy/directus-extension-schema-snapshot/compare/v1.3.0...v1.3.1) (2026-07-09)
 
 

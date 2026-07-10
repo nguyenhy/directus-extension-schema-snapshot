@@ -37,6 +37,7 @@ program
   .option('--file-format <format>', 'value written for SCHEMA_SNAPSHOT_FILE_FORMAT (see Global options)', config.defaultFileFormat)
   .option('--snapshots-dir <dir>', 'value written for SCHEMA_SNAPSHOT_SNAPSHOTS_DIR (see Global options)', config.defaultSnapshotsDir)
   .option('--json', 'output the init view as JSON (for UI / programmatic use)')
+  .option('-y, --yes', 'auto-override an existing/non-empty target dir without prompting (non-interactive)')
   .action(cmdInit);
 
 program

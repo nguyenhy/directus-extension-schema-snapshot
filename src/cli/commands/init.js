@@ -1,6 +1,7 @@
 const path = require('path');
+const readline = require('readline');
 const { createEnv } = require('../../core/env');
-const { initRepo, assertReadyForInit } = require('../../core/operations/init');
+const { initRepo, checkInitConflict } = require('../../core/operations/init');
 const { printInitView } = require('../render/init');
 const {
   ENV_VAR_OUT_DIR,
@@ -26,6 +27,24 @@ const OPTION_TO_ENV_VAR = {
 };
 
 /**
+ * Prompts "override? [y/N]" on the given TTY streams. Only ever called
+ * when stdin is a TTY (see cmdInit) — a piped/CI stdin has no one to
+ * answer, so that path skips straight to the doc-and-exit fallback
+ * instead of hanging on a prompt that will never resolve.
+ * @param {string} message
+ * @returns {Promise<boolean>}
+ */
+function promptOverride(message) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(`${message} Override? [y/N] `, (answer) => {
+      rl.close();
+      resolve(/^y(es)?$/i.test(answer.trim()));
+    });
+  });
+}
+
+/**
  * commander action handler for `init [dir]`.
  * `storeDir`/`snapshotsDir` are resolved relative to the target `dir`
  * (not cwd) — init is setting up `dir`, so its store should live inside
@@ -37,15 +56,29 @@ const OPTION_TO_ENV_VAR = {
  * or its commander default, so the written file always reflects what
  * this run actually used, not just the template's own defaults.
  *
- * `assertReadyForInit` runs BEFORE `createEnv` constructs the Store —
+ * `checkInitConflict` runs BEFORE `createEnv` constructs the Store —
  * GitStore's constructor eagerly `mkdir`s its storeDir, which would make
  * `dir` look non-empty to the check if done after. See that function's
  * doc in core/operations/init.js.
+ *
+ * On conflict: `--yes` overrides without asking; otherwise, if stdin is a
+ * TTY, prompts "override? [y/N]"; otherwise (non-interactive, e.g. CI)
+ * prints the conflict + a pointer to manual setup steps and returns
+ * without throwing — no hung prompt, no stack trace.
  * @param {string} dir - target directory argument from the CLI
  * @param {{storeDir: string, storeType: string, outDir: string, schemaType: string, subdirFormat: string, fileFormat: string, snapshotsDir: string, json?: boolean}} options - commander-parsed options
  */
 async function cmdInit(dir, options) {
-  assertReadyForInit(dir);
+  const conflict = checkInitConflict(dir);
+  if (conflict) {
+    const canPrompt = !options.yes && process.stdin.isTTY;
+    const proceed = options.yes || (canPrompt && (await promptOverride(conflict.message)));
+    if (!proceed) {
+      console.log(`Error: ${conflict.message}`);
+      console.log('See README.md "Getting started" for manual setup steps (copy .env.schema-snapshot.example, add .snapshot/ to .gitignore, run `add`).');
+      return;
+    }
+  }
   const { store } = createEnv({ storeDir: path.join(dir, options.storeDir), storeType: options.storeType });
 
   const envOverrides = {};

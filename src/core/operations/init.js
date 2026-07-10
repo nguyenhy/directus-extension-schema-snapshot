@@ -108,17 +108,33 @@ function findEnvRoot(dir) {
  * @param {string} dir - target directory
  */
 function assertReadyForInit(dir) {
+  const err = checkInitConflict(dir);
+  if (err) throw err;
+}
+
+/**
+ * Same check as `assertReadyForInit`, but returns the conflict instead of
+ * throwing it — lets a caller (e.g. `cmdInit`) decide whether to prompt
+ * for an override instead of dying immediately. `assertReadyForInit`
+ * stays the throwing form so existing callers/tests are unaffected.
+ * @param {string} dir - target directory
+ * @returns {AlreadyInitializedError|DirectoryNotEmptyError|null} the
+ *   conflict, or `null` if `dir` is ready for `initRepo`
+ */
+function checkInitConflict(dir) {
   platformFs.mkdir(dir);
 
   const marker = ALREADY_INIT_MARKERS.find((entry) => platformFs.exists(path.join(dir, entry)));
   if (marker) {
-    throw new AlreadyInitializedError(`"${dir}" is already initialized (found "${marker}"). Run schema-snapshot commands directly, or choose an empty target dir.`);
+    return new AlreadyInitializedError(`"${dir}" is already initialized (found "${marker}"). Run schema-snapshot commands directly, or choose an empty target dir.`);
   }
 
   const existing = platformFs.readdir(dir).filter((entry) => !IGNORABLE_ENTRIES.has(entry));
   if (existing.length > 0) {
-    throw new DirectoryNotEmptyError(`"${dir}" is not empty (found: ${existing.join(', ')}). init requires an empty target dir.`);
+    return new DirectoryNotEmptyError(`"${dir}" is not empty (found: ${existing.join(', ')}). init requires an empty target dir.`);
   }
+
+  return null;
 }
 
 /**
@@ -170,4 +186,4 @@ async function initRepo({ dir, store, envOverrides = {} }) {
   });
 }
 
-module.exports = { initRepo, assertReadyForInit, findEnvRoot, renderEnvContent, OVERRIDABLE_VARS };
+module.exports = { initRepo, assertReadyForInit, checkInitConflict, findEnvRoot, renderEnvContent, OVERRIDABLE_VARS };

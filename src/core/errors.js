@@ -24,7 +24,6 @@ class SourceNotFoundError extends SchemaSnapshotError {}
 class NoVersionsError extends SchemaSnapshotError {}
 class UnsupportedComboError extends SchemaSnapshotError {}
 class SyncStateError extends SchemaSnapshotError {}
-class AlreadyInitializedError extends SchemaSnapshotError {}
 class DirectoryNotEmptyError extends SchemaSnapshotError {}
 class SourceHashCollisionError extends SchemaSnapshotError {}
 
@@ -44,7 +43,6 @@ module.exports = {
   NoVersionsError,
   UnsupportedComboError,
   SyncStateError,
-  AlreadyInitializedError,
   DirectoryNotEmptyError,
   SourceHashCollisionError,
 };

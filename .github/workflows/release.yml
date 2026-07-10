@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write # CRITICAL: Allows OIDC authentication
 
 concurrency:
   group: release
@@ -16,6 +15,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
+      id-token: write # CRITICAL: Allows OIDC authentication
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5

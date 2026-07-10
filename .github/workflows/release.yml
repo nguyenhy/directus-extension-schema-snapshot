@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: write
-  id-token: write
+  id-token: write # CRITICAL: Allows OIDC authentication
 
 concurrency:
   group: release
@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # semantic-release detects OIDC automatically if NPM_TOKEN is absent
       - run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Built-in GitHub token
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}       # Your npm write token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

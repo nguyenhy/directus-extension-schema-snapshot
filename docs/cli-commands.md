@@ -57,9 +57,9 @@ schema-snapshot init [dir] [--store-dir <dir>] [--store-type <type>] [--json]
 
 ### DESCRIPTION
 
-One-command onboarding: copies the bundled `.env.schema-snapshot.example` template, writes a `.gitignore` entry for the local store cache, and initializes the local GitStore — replaces five manual setup steps (mkdir, copy env template, edit `.gitignore`, `git init` the cache, remember the cwd/.env gotcha) with one.
+One-command onboarding: copies the bundled `.env.schema-snapshot.example` template and writes a `.gitignore` entry for the local store cache. That's the entire scope — it deliberately does NOT touch or check `SCHEMA_SNAPSHOT_OUT_DIR`/`SCHEMA_SNAPSHOT_STORE_DIR` (both live under the gitignored `.snapshot/` cache, which `add` creates lazily and idempotently on first use — `git init` there is itself a no-op if already a repo).
 
-`dir` defaults to `.` (cwd). `init` rejects if `dir` already looks initialized (`schema-snapshots/` or `.snapshot/` present) or has unrelated content already — see "Reject conditions" below.
+`dir` defaults to `.` (cwd). Re-running `init` on an already-set-up `dir` is a safe no-op, not an error — see "Reject conditions" below for the one real conflict case.
 
 **Where `.env.schema-snapshot` goes:** the nearest ancestor directory containing a `package.json`, walking up from `dir` (including `dir` itself) — matching how a user would `cd` into their project root and run commands without `--env-file`. If no `package.json` is found anywhere up the tree, it's written directly into `dir`. The local store cache and `.gitignore` always stay local to `dir`, regardless of where `.env.schema-snapshot` landed.
 
@@ -73,12 +73,12 @@ One-command onboarding: copies the bundled `.env.schema-snapshot.example` templa
 
 **Reject conditions:**
 
-- `dir` contains `schema-snapshots/` or `.snapshot/` — already initialized; `init` is a one-time setup, not an idempotent sync. Run commands directly instead.
-- `dir` has other real content (not OS junk, not `.env`/`.env.schema-snapshot`/`package.json`) — likely the wrong target; pick an empty dir. `.env`/`package.json` are allowed to preexist since `dir` may legitimately already be a project root.
+- `--snapshots-dir` (`schema-snapshots/`, host-repo-committed, default `schema-snapshots`) has content that isn't a recognized event log (`meta.json` + `source/`) — likely the wrong target; a `sync` could otherwise write into unrelated, occupied content. A `schema-snapshots/` from a prior `init`/`add`/`sync` is NOT a conflict — reused as-is. Prompts to proceed anyway (TTY), or use `--yes`.
+- `.env.schema-snapshot` already existing at the resolved env root is not a reject condition — prompts (TTY) to overwrite with a fresh template or leave it untouched; `--yes` always leaves it untouched.
 
 ### OPTIONS
 
-Every flag below is written into the scaffolded `.env.schema-snapshot` as the matching `SCHEMA_SNAPSHOT_*` var (see Global options for what each var controls) — using either the flag's explicit value or its default, so the written file always matches what this run actually used. Ignored (with the file left untouched) if `.env.schema-snapshot` already existed at the resolved env root.
+Every flag below is written into the scaffolded `.env.schema-snapshot` as the matching `SCHEMA_SNAPSHOT_*` var (see Global options for what each var controls) — using either the flag's explicit value or its default, so the written file always matches what this run actually used. Ignored (with the file left untouched) if `.env.schema-snapshot` already existed and the overwrite prompt was declined.
 
 | flag                       | env var written                                                                    |
 | -------------------------- | ---------------------------------------------------------------------------------- |

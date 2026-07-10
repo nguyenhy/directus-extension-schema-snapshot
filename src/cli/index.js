@@ -27,7 +27,7 @@ program
 
 program
   .command('init')
-  .description('set up a target directory for first use: writes .env.schema-snapshot, writes .gitignore, initializes the local store — reject if dir already initialized or non-empty')
+  .description('set up a target directory for first use: writes .env.schema-snapshot, writes .gitignore — reject only if --snapshots-dir has unrelated content')
   .argument('[dir]', 'target directory to initialize', '.')
   .option('--out-dir <dir>', 'value written for SCHEMA_SNAPSHOT_OUT_DIR (see Global options)', config.defaultOutDir)
   .option('--schema-type <type>', 'value written for SCHEMA_SNAPSHOT_TYPE (see Global options)', config.defaultSchemaType)
@@ -37,6 +37,7 @@ program
   .option('--file-format <format>', 'value written for SCHEMA_SNAPSHOT_FILE_FORMAT (see Global options)', config.defaultFileFormat)
   .option('--snapshots-dir <dir>', 'value written for SCHEMA_SNAPSHOT_SNAPSHOTS_DIR (see Global options)', config.defaultSnapshotsDir)
   .option('--json', 'output the init view as JSON (for UI / programmatic use)')
+  .option('-y, --yes', 'auto-override an existing/non-empty target dir without prompting (non-interactive)')
   .action(cmdInit);
 
 program

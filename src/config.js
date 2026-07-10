@@ -25,6 +25,15 @@ const {
   ENV_VAR_FILE_FORMAT,
   ENV_VAR_SNAPSHOTS_DIR,
 } = require('./core/envVars');
+const {
+  DEFAULT_OUT_DIR,
+  DEFAULT_SCHEMA_TYPE,
+  DEFAULT_SUBDIR_FORMAT,
+  DEFAULT_STORE_DIR,
+  DEFAULT_STORE_TYPE,
+  DEFAULT_FILE_FORMAT,
+  DEFAULT_SNAPSHOTS_DIR,
+} = require('./core/defaults');
 
 // Own-namespaced default — kept in sync with core/operations/init.js's
 // ENV_FILENAME (not imported from there: config.js must stay a
@@ -103,13 +112,13 @@ function envOr(name, fallback) {
 
 /** @type {Config} */
 const config = {
-  defaultOutDir: envOr(ENV_VAR_OUT_DIR, '.snapshot/normalized'),
-  defaultSchemaType: envOr(ENV_VAR_TYPE, 'directus'),
-  defaultSubdirFormat: envOr(ENV_VAR_SUBDIR_FORMAT, '{time}_{name}'),
-  defaultStoreDir: envOr(ENV_VAR_STORE_DIR, '.snapshot/repo'),
-  defaultStoreType: envOr(ENV_VAR_STORE_TYPE, 'git'),
-  defaultFileFormat: envOr(ENV_VAR_FILE_FORMAT, 'json'),
-  defaultSnapshotsDir: envOr(ENV_VAR_SNAPSHOTS_DIR, 'schema-snapshots'),
+  defaultOutDir: envOr(ENV_VAR_OUT_DIR, DEFAULT_OUT_DIR),
+  defaultSchemaType: envOr(ENV_VAR_TYPE, DEFAULT_SCHEMA_TYPE),
+  defaultSubdirFormat: envOr(ENV_VAR_SUBDIR_FORMAT, DEFAULT_SUBDIR_FORMAT),
+  defaultStoreDir: envOr(ENV_VAR_STORE_DIR, DEFAULT_STORE_DIR),
+  defaultStoreType: envOr(ENV_VAR_STORE_TYPE, DEFAULT_STORE_TYPE),
+  defaultFileFormat: envOr(ENV_VAR_FILE_FORMAT, DEFAULT_FILE_FORMAT),
+  defaultSnapshotsDir: envOr(ENV_VAR_SNAPSHOTS_DIR, DEFAULT_SNAPSHOTS_DIR),
 };
 
 module.exports = config;

@@ -40,7 +40,7 @@ Or add as a dependency:
 
 ```
 npm install schema-snapshot
-npx schema-snapshot init   # scaffolds .env.schema-snapshot + local store, see docs/cli-commands.md#init
+npx schema-snapshot init   # scaffolds .env.schema-snapshot + .gitignore, see docs/cli-commands.md#init
 ```
 
 (From a cloned repo without `npm link`, swap `npx schema-snapshot` → `node src/cli/index.js`.)

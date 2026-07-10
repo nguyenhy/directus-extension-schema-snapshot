@@ -1,8 +1,10 @@
 const path = require('path');
 const platformFs = require('../platform/fs');
 const { buildInitView } = require('../present/init');
-const { AlreadyInitializedError, DirectoryNotEmptyError } = require('../errors');
+const { DirectoryNotEmptyError } = require('../errors');
 const { PACKAGE_ROOT } = require('../../packageRoot');
+const { META_FILE, SOURCE_DIR } = require('../snapshotSync/eventLog');
+const { DEFAULT_SNAPSHOTS_DIR } = require('../defaults');
 const {
   ENV_VAR_OUT_DIR,
   ENV_VAR_TYPE,
@@ -22,20 +24,14 @@ const ENV_EXAMPLE_SRC = path.join(PACKAGE_ROOT, '.env.schema-snapshot.example');
 // only if this file doesn't exist).
 const ENV_FILENAME = '.env.schema-snapshot';
 
-// Files that a target dir may already contain without being considered
-// "non-empty" — OS/editor junk, plus `.env`/`.env.schema-snapshot`/
-// `package.json` which may legitimately preexist (dir is itself a
-// project root) without meaning schema-snapshot was already set up there.
-const IGNORABLE_ENTRIES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini', '.gitkeep', '.env', ENV_FILENAME, 'package.json']);
+// OS/editor junk that never counts as real content anywhere init inspects.
+const IGNORABLE_ENTRIES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini', '.gitkeep']);
 
-// Presence of either of these in the target dir means a previous `init`
-// (or manual `add`/`sync` setup) already happened there. `.env` is
-// deliberately NOT here — see findEnvRoot()/initRepo(): a `.env` may
-// belong to an unrelated host project at the resolved env root and
-// existing there doesn't mean schema-snapshot itself was ever set up.
-const ALREADY_INIT_MARKERS = ['schema-snapshots', '.snapshot'];
+// The only entries a schema-snapshots/ dir can contain and still be a
+// valid, reusable event log (see docs/proposal-schema-snapshot-sync.md §2
+// and core/snapshotSync/eventLog.js's module header for the layout).
+const RECOGNIZED_SNAPSHOTS_ENTRIES = new Set([META_FILE, SOURCE_DIR]);
 
-const GITIGNORE_LINES = ['.snapshot/'];
 
 // Every SCHEMA_SNAPSHOT_* var the template declares uncommented — the set
 // `init`'s CLI flags are allowed to override at scaffold time. Keep in
@@ -93,81 +89,198 @@ function findEnvRoot(dir) {
 }
 
 /**
- * Validates a target dir is safe to `init` into — must run BEFORE the
- * caller constructs a Store for `dir` (e.g. via createEnv), since
- * GitStore's constructor eagerly `mkdir`s its storeDir as a side effect;
- * constructing it first would create `<dir>/.snapshot/...` and make the
- * dir look non-empty to this very check.
- *
- * Rejects if the dir already looks initialized (has `schema-snapshots/`
- * or `.snapshot/`) — `init` is a one-time setup, not an idempotent sync.
- * Also rejects if the dir has other content already,
- * since silently mixing schema-snapshot scaffolding into an unrelated
- * populated dir is more likely a mistake than intent. OS junk files
- * (`.DS_Store`, etc, see IGNORABLE_ENTRIES) don't count against emptiness.
+ * Resolves `<envRoot>/.env.schema-snapshot` for `dir` and reports whether
+ * it already exists — lets a caller (e.g. `cmdInit`) decide how to handle
+ * a pre-existing file (prompt to overwrite, or leave it) BEFORE `initRepo`
+ * runs, since `initRepo` itself only ever writes, never asks.
  * @param {string} dir - target directory
+ * @returns {{envPath: string, exists: boolean}}
  */
-function assertReadyForInit(dir) {
+function checkEnvFile(dir) {
+  const envPath = path.join(findEnvRoot(dir), ENV_FILENAME);
+  return { envPath, exists: platformFs.exists(envPath) };
+}
+
+/**
+ * Classifies `<dir>/<snapshotsDirName>` for init purposes — the only
+ * content `init` still validates (see checkInitConflict's doc for why
+ * OUT_DIR/STORE_DIR are no longer checked here at all).
+ * - 'missing': doesn't exist, or exists but has nothing beyond OS junk —
+ *   safe for init to leave untouched; a later `add`/`sync` creates it.
+ * - 'existing': contains only recognized event-log entries (`meta.json`,
+ *   `source/`) from a prior `add`/`sync` — a valid schema-snapshots dir
+ *   already; safe to reuse as-is, not a conflict. This is what makes
+ *   "init after init" idempotent instead of an error.
+ * - 'conflict': contains something else — ambiguous enough that a later
+ *   `sync` could write `meta.json` into an unrelated, occupied dir the
+ *   user pointed init at by mistake.
+ * @param {string} dir
+ * @param {string} snapshotsDirName
+ * @returns {{status: 'missing'|'existing'|'conflict', path: string, foreign?: string[]}}
+ */
+function classifySnapshotsDir(dir, snapshotsDirName) {
+  const snapshotsPath = path.join(dir, snapshotsDirName);
+  if (!platformFs.exists(snapshotsPath)) return { status: 'missing', path: snapshotsPath };
+
+  const entries = platformFs.readdir(snapshotsPath).filter((entry) => !IGNORABLE_ENTRIES.has(entry));
+  if (entries.length === 0) return { status: 'missing', path: snapshotsPath };
+
+  const foreign = entries.filter((entry) => !RECOGNIZED_SNAPSHOTS_ENTRIES.has(entry));
+  if (foreign.length > 0) return { status: 'conflict', path: snapshotsPath, foreign };
+
+  return { status: 'existing', path: snapshotsPath };
+}
+
+/**
+ * Validates a target dir is safe to `init` into. `SCHEMA_SNAPSHOT_OUT_DIR`
+ * and `SCHEMA_SNAPSHOT_STORE_DIR` are deliberately NOT checked: both live
+ * under the gitignored `.snapshot/` cache, which every downstream command
+ * that touches it (`add`, `normalize`, `sync`, `list`) already tolerates
+ * pre-existing content in — `GitStore.init()` is itself idempotent (checks
+ * its own `.git`, no-op if present), and `normalize`'s `runSubDir` always
+ * writes a fresh timestamped subdir, never collides. Blocking `init` on
+ * either would be stricter than the commands it's protecting.
+ *
+ * `SCHEMA_SNAPSHOT_SNAPSHOTS_DIR` (schema-snapshots/) is the one directory
+ * `init` still validates: it's host-repo-committed (not gitignored) and
+ * has real structure a `sync` could corrupt if occupied by something
+ * unrelated — see classifySnapshotsDir's doc. A dir with a *valid* prior
+ * event log is not a conflict, only truly foreign content is.
+ * @param {string} dir - target directory
+ * @param {string} [snapshotsDirName] - value of SCHEMA_SNAPSHOT_SNAPSHOTS_DIR to check, relative to `dir`
+ */
+function assertReadyForInit(dir, snapshotsDirName) {
+  const err = checkInitConflict(dir, snapshotsDirName);
+  if (err) throw err;
+}
+
+/**
+ * Same check as `assertReadyForInit`, but returns the conflict instead of
+ * throwing it — lets a caller (e.g. `cmdInit`) decide whether to prompt
+ * for an override instead of dying immediately. `assertReadyForInit`
+ * stays the throwing form so existing callers/tests are unaffected.
+ * @param {string} dir - target directory
+ * @param {string} [snapshotsDirName] - defaults to config's default ('schema-snapshots')
+ * @returns {DirectoryNotEmptyError|null} the conflict, or `null` if `dir`
+ *   is ready for `initRepo` (including the idempotent "already has a
+ *   valid event log" case, which is never a conflict)
+ */
+function checkInitConflict(dir, snapshotsDirName = DEFAULT_SNAPSHOTS_DIR) {
   platformFs.mkdir(dir);
 
-  const marker = ALREADY_INIT_MARKERS.find((entry) => platformFs.exists(path.join(dir, entry)));
-  if (marker) {
-    throw new AlreadyInitializedError(`"${dir}" is already initialized (found "${marker}"). Run schema-snapshot commands directly, or choose an empty target dir.`);
+  const classified = classifySnapshotsDir(dir, snapshotsDirName);
+  if (classified.status === 'conflict') {
+    return new DirectoryNotEmptyError(
+      `"${classified.path}" is not empty (found: ${classified.foreign.join(', ')}) and isn't a recognized schema-snapshots event log. ` +
+        'init requires it to be empty, absent, or already a valid schema-snapshots dir.'
+    );
   }
 
-  const existing = platformFs.readdir(dir).filter((entry) => !IGNORABLE_ENTRIES.has(entry));
-  if (existing.length > 0) {
-    throw new DirectoryNotEmptyError(`"${dir}" is not empty (found: ${existing.join(', ')}). init requires an empty target dir.`);
-  }
+  return null;
+}
+
+/**
+ * Resolves the `.gitignore` entry for `target` (an OUT_DIR/STORE_DIR
+ * value, absolute or relative to `dir`) relative to `dir` itself —
+ * `.gitignore` only has meaning for paths inside the repo it lives in.
+ * @param {string} dir - target directory being initialized (the .gitignore's location)
+ * @param {string} target - OUT_DIR or STORE_DIR value, as configured
+ * @returns {string|null} POSIX-style relative entry with trailing slash,
+ *   or `null` if `target` resolves outside `dir` (e.g. an absolute path
+ *   elsewhere, like `--out-dir ~/Doc/out`) — gitignoring it would be a
+ *   no-op there and misleading to write into `dir`'s own `.gitignore`.
+ */
+function gitignoreEntryFor(dir, target) {
+  const resolvedDir = path.resolve(dir);
+  const resolvedTarget = path.resolve(dir, target);
+  const rel = path.relative(resolvedDir, resolvedTarget);
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return rel.split(path.sep).join('/') + '/';
+}
+
+/**
+ * Ensures each of `lines` is present in `<dir>/.gitignore`, appending only
+ * the missing ones — never overwrites. A target `dir` may already have a
+ * real `.gitignore` (it's often a project root), and a blind overwrite
+ * would destroy it; init only ever ADDS to it.
+ * @param {string} gitignorePath - absolute path to the target .gitignore
+ * @param {string[]} lines - entries to ensure are present
+ * @returns {boolean} true if the file was created or a line was appended
+ */
+function appendGitignoreLines(gitignorePath, lines) {
+  const exists = platformFs.exists(gitignorePath);
+  const existing = exists ? platformFs.readFile(gitignorePath) : '';
+  const existingLines = new Set(existing.split('\n').map((line) => line.trim()));
+  const missing = lines.filter((line) => !existingLines.has(line));
+  if (missing.length === 0) return false;
+
+  const needsNewline = existing.length > 0 && !existing.endsWith('\n');
+  const addition = (needsNewline ? '\n' : '') + missing.join('\n') + '\n';
+  platformFs.appendFile(gitignorePath, addition);
+  return true;
 }
 
 /**
  * Sets up a target directory for schema-snapshot use: copies the bundled
- * `.env.schema-snapshot.example` to `<envRoot>/.env.schema-snapshot` (see findEnvRoot —
- * a nested `dir` inside an existing package.json project gets it at that
- * project's root; a standalone `dir` gets its own), appends the store
- * cache dir to `<dir>/.gitignore`, and initializes the local GitStore
- * cache — the "one command instead of five manual steps" onboarding
- * path. Using `.env.schema-snapshot` instead of `.env` means init never
- * touches a host project's real `.env`.
+ * `.env.schema-snapshot.example` to `<envRoot>/.env.schema-snapshot` (see
+ * findEnvRoot — a nested `dir` inside an existing package.json project
+ * gets it at that project's root; a standalone `dir` gets its own), and
+ * writes `<dir>/.gitignore`. That's the entire scope of `init` now — it
+ * no longer touches `.snapshot/` (OUT_DIR/STORE_DIR) or constructs a
+ * Store; those are created lazily and idempotently by the first `add`.
  *
- * If `.env.schema-snapshot` already exists at the resolved env root,
- * it's left alone (not overwritten, `envOverrides` ignored too) — most
- * likely a prior `init` run; re-run against an empty dir to apply new
- * overrides instead.
+ * If `.env.schema-snapshot` already exists at the resolved env root, it's
+ * left alone unless `overwriteEnv` is passed — see `cmdInit`, which
+ * decides that via a user prompt/`--yes` before calling this.
  *
- * Caller must call `assertReadyForInit(dir)` before constructing `store`
- * (see that function's doc) — this function assumes that already passed
- * and does not re-check, since by the time `store` exists here the
- * constructor's mkdir side effect has already happened.
- * @param {{dir: string, store: import('../store/store').Store, envOverrides?: Object<string, string>}} params
- *   `store` is injected the same way every other core/operations/*.js
- *   takes it — constructed once by createEnv(), never `new GitStore()`
- *   here. `envOverrides` — `{SCHEMA_SNAPSHOT_X: value}` pairs (see
- *   OVERRIDABLE_VARS) written into the freshly-scaffolded env file in
- *   place of the template's defaults; unrecognized keys are ignored.
+ * Caller must call `assertReadyForInit(dir, snapshotsDirName)` first (see
+ * that function's doc) to validate the schema-snapshots/ target.
+ * @param {{dir: string, outDir: string, storeDir: string, envOverrides?: Object<string, string>, overwriteEnv?: boolean}} params
+ *   `envOverrides` — `{SCHEMA_SNAPSHOT_X: value}` pairs (see
+ *   OVERRIDABLE_VARS) written into the scaffolded env file in place of
+ *   the template's defaults; unrecognized keys are ignored.
+ *   `overwriteEnv` — if true and the env file already exists, rewrite it
+ *   from the template anyway (default: leave it untouched).
+ *   `outDir`/`storeDir` — required, no default here: the actual
+ *   configured SCHEMA_SNAPSHOT_OUT_DIR / SCHEMA_SNAPSHOT_STORE_DIR values
+ *   — `cmdInit` always has these (commander bakes config.js's defaults
+ *   into the option defaults, see cli/index.js), so there's no case where
+ *   the real caller doesn't have a value; a second hardcoded default here
+ *   would just be a copy of config.js's that could drift. Only the ones
+ *   that resolve INSIDE `dir` get a `.gitignore` entry; see
+ *   gitignoreEntryFor's doc for why an `--out-dir` pointed elsewhere
+ *   (e.g. `~/Doc/out`) is skipped.
  * @returns {Promise<ReturnType<typeof buildInitView>>}
  */
-async function initRepo({ dir, store, envOverrides = {} }) {
-  const envRoot = findEnvRoot(dir);
-  const envPath = path.join(envRoot, ENV_FILENAME);
-  const envAlreadyExisted = platformFs.exists(envPath);
-  if (!envAlreadyExisted) {
+async function initRepo({ dir, outDir, storeDir, envOverrides = {}, overwriteEnv = false }) {
+  platformFs.mkdir(dir);
+  const { envPath, exists: envAlreadyExisted } = checkEnvFile(dir);
+  const writeEnv = !envAlreadyExisted || overwriteEnv;
+  if (writeEnv) {
     const template = platformFs.readFile(ENV_EXAMPLE_SRC);
     platformFs.writeFile(envPath, renderEnvContent(template, envOverrides));
   }
 
-  const gitignorePath = path.join(dir, '.gitignore');
-  platformFs.writeFile(gitignorePath, GITIGNORE_LINES.join('\n') + '\n');
-
-  await store.init();
+  const gitignoreLines = [...new Set([gitignoreEntryFor(dir, outDir), gitignoreEntryFor(dir, storeDir)].filter(Boolean))];
+  const gitignorePath = path.join(path.resolve(dir), '.gitignore');
+  const gitignoreChanged = gitignoreLines.length > 0 && appendGitignoreLines(gitignorePath, gitignoreLines);
 
   return buildInitView({
     dir,
     envPath,
-    envCreated: !envAlreadyExisted,
-    filesCreated: [...(envAlreadyExisted ? [] : [envPath]), gitignorePath],
+    envCreated: writeEnv,
+    envReused: envAlreadyExisted && !writeEnv,
+    filesCreated: [...(writeEnv ? [envPath] : []), ...(gitignoreChanged ? [gitignorePath] : [])],
   });
 }
 
-module.exports = { initRepo, assertReadyForInit, findEnvRoot, renderEnvContent, OVERRIDABLE_VARS };
+module.exports = {
+  initRepo,
+  assertReadyForInit,
+  checkInitConflict,
+  checkEnvFile,
+  findEnvRoot,
+  renderEnvContent,
+  OVERRIDABLE_VARS,
+  ENV_FILENAME,
+};

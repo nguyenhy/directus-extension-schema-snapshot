@@ -27,6 +27,7 @@
   "engines": {
     "node": ">=22.14.0"
   },
+  "packageManager": "npm@11.18.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nguyenhy/directus-extension-schema-snapshot.git"
